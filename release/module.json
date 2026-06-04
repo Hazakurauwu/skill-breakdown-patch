@@ -4,7 +4,7 @@
   "supportUrl": "https://github.com/neowutran/ShinraMeter/issues",
   "author": "Foglio, Gl0, neowutran and others",
   "description": "Shinra DPS meter.",
-  "disableAutoUpdate": false,
+  "disableAutoUpdate": true,
   "keywords": [ "client" ],
   "options": {
     "cliName": "shinra-meter",
