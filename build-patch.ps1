@@ -13,8 +13,8 @@
 #   pwsh ./build-patch.ps1 -MeterDir "<folder with the meter dlls>" -OutDir "<output>"
 
 param(
-    [string]$MeterDir = "C:\Users\Night\Downloads\shinra-meter-asura-master\shinra-meter-asura-master",
-    [string]$OutDir   = "C:\Users\Night\Documents\shinra-rotation\dist"
+    [Parameter(Mandatory)][string]$MeterDir,
+    [Parameter(Mandatory)][string]$OutDir
 )
 
 $ErrorActionPreference = "Stop"
