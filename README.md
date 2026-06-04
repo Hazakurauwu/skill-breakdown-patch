@@ -1,6 +1,6 @@
 # ShinraMeter Rotation Patch
 
-This patch adds hit-by-hit skill tracking to ShinraMeter for TeraToolbox (Asura). Once installed, your encounters on [enragedon.com](https://enragedon.com) will show a **Skill Breakdown** timeline and **DPS Graph** tab.
+This patch adds hit-by-hit skill tracking to ShinraMeter (any TeraToolbox build). Once installed, your encounters on [enragedon.com](https://enragedon.com) will show a **Skill Breakdown** timeline and **DPS Graph** tab.
 
 ---
 
@@ -54,5 +54,5 @@ The hit-by-hit data is only attached to uploads going to **enragedon.com**. Any 
 ## Notes
 
 - Works on Windows 10 and 11
-- Tested with TeraToolbox and the Asura private server ShinraMeter
+- The patched code is merged into `DamageMeter.dll` as a single self-contained file, so it works on any TeraToolbox ShinraMeter build (no dependency on how that build loads assemblies)
 - If ShinraMeter updates to a new version, the patch needs to be reapplied with `build-patch.ps1`
