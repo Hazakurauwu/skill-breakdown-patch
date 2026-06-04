@@ -21,6 +21,7 @@ static class Program
             case "mergeinject": return MergeInject(args[1], args[2], args[3]);
             case "verify": return Verify(args[1]);
             case "dump": return Dump(args[1]);
+            case "dumpm": return DumpMethod(args[1], args[2], args[3]);
             case "sn":
                 foreach (var f in args.Skip(1))
                 {
@@ -227,11 +228,16 @@ static class Program
                     case ITypeDefOrRef td: instr.Operand = RemapTD(td, importer, mod); break;
                     case MemberRef mr:     instr.Operand = RemapMember(mr, importer, mod); break;
                     case MethodSpec msp:   instr.Operand = RemapMethodSpec(msp, importer, mod); break;
+                    case MethodDef md:     /* own method (e.g. ApplyForServer->Enrich): keep, becomes internal */ break;
+                    case FieldDef fd:      /* own static field (_last): keep, becomes internal */ break;
                     case IMethod im:       instr.Operand = importer.Import(im); break;
                     case IField ifld:      instr.Operand = importer.Import(ifld); break;
                 }
             }
         }
+
+        foreach (var field in rotType.Fields)
+            field.FieldSig.Type = RemapSig(field.FieldSig.Type, importer, mod);
 
         mod.Types.Add(rotType);
         Console.WriteLine("merged RotationEnricher into DamageMeter module");
@@ -295,6 +301,38 @@ static class Program
         body2.OptimizeBranches();
         body2.OptimizeMacros();
 
+        // ---- 3) INJECT ApplyForServer at the start of CheckAndSendFightData, so the
+        //         heavy dealtSkillLog is kept only for enragedon and stripped for others.
+        var applyDef = rotType.Methods.First(x => x.Name == "ApplyForServer");
+        var dps = mod.Types.First(t => t.FullName == "DamageMeter.TeraDpsApi.DpsServer");
+        var csfd = dps.Methods.First(x => x.Name == "CheckAndSendFightData"
+            && x.Parameters.Count == 3   // arg0=this, arg1=EncounterBase, arg2=NpcEntity
+            && x.Parameters[1].Type.FullName == "DamageMeter.TeraDpsApi.EncounterBase");
+        var cb = csfd.Body;
+        var first = cb.Instructions[0];
+        var pre = new System.Collections.Generic.List<Instruction>
+        {
+            OpCodes.Ldarg_0.ToInstruction(),                 // this (DpsServer)
+            OpCodes.Ldarg_1.ToInstruction(),                 // teradpsData (EncounterBase)
+            OpCodes.Call.ToInstruction(applyDef),
+        };
+        for (int i = 0; i < pre.Count; i++) cb.Instructions.Insert(i, pre[i]);
+        // retarget any branch/handler that pointed at the old first instr
+        foreach (var ins in cb.Instructions)
+        {
+            if (pre.Contains(ins)) continue;
+            if (ins.Operand is Instruction t2 && t2 == first) ins.Operand = pre[0];
+            else if (ins.Operand is Instruction[] arr2)
+                for (int k = 0; k < arr2.Length; k++) if (arr2[k] == first) arr2[k] = pre[0];
+        }
+        foreach (var eh in cb.ExceptionHandlers)
+        {
+            if (eh.TryStart == first) eh.TryStart = pre[0];
+        }
+        cb.OptimizeBranches();
+        cb.OptimizeMacros();
+        Console.WriteLine("injected ApplyForServer into CheckAndSendFightData");
+
         mod.Write(outDll);
         Console.WriteLine("mergeinject done: " + outDll);
         return 0;
@@ -339,6 +377,7 @@ static class Program
             case ClassSig c:
             {
                 var td = FindInternal(dm, c.TypeDefOrRef.FullName);
+
                 return td != null ? new ClassSig(td) : imp.Import(sig);
             }
             case ValueTypeSig v:
@@ -456,6 +495,28 @@ static class Program
         Console.WriteLine();
         Console.WriteLine(ok ? "ALL CHECKS PASSED" : "SOME CHECKS FAILED");
         return ok ? 0 : 1;
+    }
+
+    static int DumpMethod(string inDll, string typeName, string methodName)
+    {
+        var mod = ModuleDefMD.Load(inDll);
+        var ty = mod.Types.FirstOrDefault(t => t.FullName == typeName || t.Name == typeName);
+        if (ty == null) { Console.Error.WriteLine("type not found: " + typeName); return 3; }
+        foreach (var m in ty.Methods.Where(x => x.Name == methodName))
+        {
+            Console.WriteLine("== " + m.FullName + " ==");
+            Console.WriteLine("  params: " + string.Join(", ", m.Parameters.Select(p => p.Type?.FullName + " " + p.Name)));
+            if (m.Body == null) { Console.WriteLine("  (no body)"); continue; }
+            int i = 0;
+            foreach (var ins in m.Body.Instructions)
+            {
+                if (i < 40 || (ins.Operand is IMethod im2 && (im2.Name.ToString().Contains("Serialize") || im2.Name.ToString().Contains("Post") || im2.Name.ToString().Contains("Send") || im2.Name.ToString().Contains("Upload"))))
+                    Console.WriteLine($"  {i,3}: {ins.OpCode,-12} {ins.Operand}");
+                i++;
+            }
+            Console.WriteLine("  ... total " + m.Body.Instructions.Count + " instrs");
+        }
+        return 0;
     }
 
     static int Dump(string inDll)

@@ -45,6 +45,10 @@ After playing a fight with the patch installed, the encounter page on enragedon.
 
 **DPS Graph** shows how each player's DPS changed over the course of the fight, with an optional boss HP line.
 
+## Only sent to enragedon.com
+
+The hit-by-hit data is only attached to uploads going to **enragedon.com**. Other upload targets (such as teralogs) keep getting the normal, lighter payload they already accepted, so nothing breaks for them.
+
 ---
 
 ## Notes

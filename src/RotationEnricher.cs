@@ -21,8 +21,41 @@ namespace ShinraRotationPatch
     // and avoiding compiler-generated closures/display-classes keeps that merge simple and reliable.
     public static class RotationEnricher
     {
+        // Only this host receives the heavy hit-by-hit dealtSkillLog. Other upload
+        // targets (e.g. teralogs) reject the oversized payload, so we strip it for them.
+        private const string KeepHost = "enragedon";
+
+        // Last stats captured in AutomatedExport, so we can re-fill the log per server.
+        internal static ExtendedStats _last;
+
+        // Called at the start of DpsServer.CheckAndSendFightData (injected), once per
+        // upload target, BEFORE serialization. Keeps dealtSkillLog only for enragedon.
+        internal static void ApplyForServer(DpsServer server, EncounterBase data)
+        {
+            try
+            {
+                bool keep = false;
+                if (server != null)
+                {
+                    var url = server.UploadUrl;
+                    if (url != null && url.ToString().IndexOf(KeepHost, StringComparison.OrdinalIgnoreCase) >= 0)
+                        keep = true;
+                }
+                if (keep)
+                {
+                    if (_last != null) Enrich(_last);          // (re)fill for enragedon
+                }
+                else if (data != null && data.members != null)
+                {
+                    foreach (Members m in data.members) m.dealtSkillLog = null;  // strip for others
+                }
+            }
+            catch { /* never break the upload */ }
+        }
+
         internal static void Enrich(ExtendedStats stats)
         {
+            _last = stats;
             try
             {
                 if (stats == null || stats.BaseStats == null || stats.AllSkills == null) return;
