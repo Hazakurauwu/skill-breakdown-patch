@@ -33,10 +33,14 @@ Write-Host "   ShinraMeter Rotation Patch - Installer" -ForegroundColor Green
 Write-Host "  ============================================" -ForegroundColor Green
 Write-Host ""
 
+# Patch files live in a 'release' subfolder, or right next to this script
+# (depends on how the zip was extracted). Accept both.
 $releaseDir = Join-Path $PSScriptRoot "release"
+if (-not (Test-Path "$releaseDir\DamageMeter.dll")) { $releaseDir = $PSScriptRoot }
 if (-not (Test-Path "$releaseDir\DamageMeter.dll")) {
-    Write-Host "  ERROR: the 'release' folder is missing." -ForegroundColor Red
-    Write-Host "  Make sure you extracted the WHOLE zip, then run install.bat again." -ForegroundColor Red
+    Write-Host "  ERROR: could not find the patch files (DamageMeter.dll)." -ForegroundColor Red
+    Write-Host "  Make sure you extracted the WHOLE zip and that install.bat is" -ForegroundColor Red
+    Write-Host "  in the same place as the .dll files. Then run install.bat again." -ForegroundColor Red
     Read-Host "  Press Enter to exit"
     exit 1
 }
