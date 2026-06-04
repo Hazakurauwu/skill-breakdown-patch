@@ -1,71 +1,58 @@
 # ShinraMeter Rotation Patch
 
-Patches the ShinraMeter mod for TeraToolbox (Asura) to send hit-by-hit skill data on each encounter upload. This unlocks the **Skill Breakdown** and **DPS Graph** features on [enragedon.com](https://enragedon.com).
-
-Without the patch, enragedon.com only receives aggregated skill stats (total damage per skill). With it, the site receives the full chronological sequence of every hit, which is used to render the timeline and rolling DPS graphs.
+This patch adds hit-by-hit skill tracking to ShinraMeter for TeraToolbox (Asura). Once installed, your encounters on [enragedon.com](https://enragedon.com) will show a **Skill Breakdown** timeline and **DPS Graph** tab.
 
 ---
 
-## What the patch does
+## How to install
 
-Two things are changed in `DamageMeter.dll`:
+1. Download **shinra-rotation-patch-v1.0.zip** from the [Releases](../../releases/latest) page
+2. Extract the zip anywhere on your computer
+3. Run **install.bat**
+4. Restart TeraToolbox
 
-1. A `dealtSkillLog` field is added to the `Members` class — this is the list that holds the hit-by-hit data.
-2. A call to `ShinraRotationPatch.RotationEnricher.Enrich(stats)` is injected into `DataExporter.AutomatedExport`, right after the existing null check on `stats`. This call populates `dealtSkillLog` for each player before the upload JSON is serialized.
+The installer will find your TeraToolbox folder automatically. If it can't find it, it will ask you where it is. Before replacing anything, it makes a backup of your original files.
 
-`ShinraRotationPatch.dll` is the helper assembly that does the actual work. Its source is in [`src/RotationEnricher.cs`](src/RotationEnricher.cs) — it mirrors the same loop that `JsonExporter.JsonSave` uses internally, so the data is identical to what ShinraMeter already computes locally.
-
-The patcher source is in [`src/Patcher.cs`](src/Patcher.cs). It uses [dnlib](https://github.com/0xd4d/dnlib) to do the IL injection.
-
-Nothing else is changed. The meter still works exactly the same way — the only difference is that uploads now include the extra field.
+That's it. Play any fight and the data will appear on enragedon.com automatically.
 
 ---
 
-## Install
+## How to uninstall
 
-**Requirements:** TeraToolbox with ShinraMeter installed.
+Go to your `TeraToolbox\mods\ShinraMeter\` folder and:
 
-1. Download the latest release (zip) from the [Releases](../../releases) page
-2. Extract anywhere
-3. Run `install.bat`
-4. The script will find your TeraToolbox folder automatically. If it can't, it asks for the path.
-5. Restart TeraToolbox
-
-Backups of your original files are saved as `*.prepatch.bak` in the ShinraMeter folder.
-
----
-
-## Uninstall
-
-In your `TeraToolbox/mods/ShinraMeter/` folder:
-
-- Copy `DamageMeter.dll.prepatch.bak` → `DamageMeter.dll`
-- Copy `ShinraMeter.deps.json.prepatch.bak` → `ShinraMeter.deps.json`
-- Copy `module.json.prepatch.bak` → `module.json`
+- Rename `DamageMeter.dll.prepatch.bak` to `DamageMeter.dll`
+- Rename `ShinraMeter.deps.json.prepatch.bak` to `ShinraMeter.deps.json`
+- Rename `module.json.prepatch.bak` to `module.json`
 - Delete `ShinraRotationPatch.dll`
+
+---
+
+## Is this safe?
+
+Yes. The source code is fully visible in this repo:
+
+- [`src/RotationEnricher.cs`](src/RotationEnricher.cs) is the code that reads the skill hits and adds them to the upload
+- [`src/Patcher.cs`](src/Patcher.cs) is the tool that injects the call into ShinraMeter
+
+The patch only adds one thing to the upload: the list of skill hits that ShinraMeter already tracks locally. Nothing else is changed and nothing is sent anywhere other than enragedon.com.
+
+Auto-update is disabled in `module.json` so TeraToolbox does not overwrite the patched files.
+
+---
+
+## What gets unlocked
+
+After playing a fight with the patch installed, the encounter page on enragedon.com will show two new tabs:
+
+**Skill Breakdown** shows each skill on its own row with every hit placed on a timeline. You can zoom in, drag to scroll, and click a skill to focus on it.
+
+**DPS Graph** shows how each player's DPS changed over the course of the fight, with an optional boss HP line.
 
 ---
 
 ## Notes
 
-- Auto-update is disabled in `module.json` to prevent TeraToolbox from overwriting the patched DLL with the original.
-- The patch is applied to the meter version included in this repo. If ShinraMeter updates to a new version, re-run `build-patch.ps1` against the new DLL (see below).
-
----
-
-## Re-patching a new meter version
-
-If ShinraMeter updates:
-
-```powershell
-# From shinra-rotation-patch root (requires .NET SDK 8)
-.\build-patch.ps1 -MeterDir "path\to\new\ShinraMeter" -OutDir ".\release"
-```
-
-This re-applies both passes and regenerates `manifest.json`. The script is in [`build-patch.ps1`](build-patch.ps1).
-
----
-
-## Compatibility
-
-Tested on Windows 10/11 x64. Requires .NET Framework 4.7.2 (already required by ShinraMeter itself).
+- Works on Windows 10 and 11
+- Tested with TeraToolbox and the Asura private server ShinraMeter
+- If ShinraMeter updates to a new version, the patch needs to be reapplied with `build-patch.ps1`
