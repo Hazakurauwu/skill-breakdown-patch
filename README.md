@@ -4,11 +4,23 @@ This patch adds hit-by-hit skill tracking to ShinraMeter (any TeraToolbox build)
 
 ---
 
-## How to install
+# ⬇️⬇️ DOWNLOAD ⬇️⬇️
+
+## 👉 [**CLICK HERE TO DOWNLOAD THE PATCH**](https://github.com/Hazakurauwu/shinra-rotation-patch/releases/latest/download/shinra-rotation-patch-v1.0.zip) 👈
+
+The download starts as soon as you click. After it finishes:
+
+1. **Right-click the downloaded zip → Extract All** (don't run it from inside the zip)
+2. Open the extracted folder and **double-click `install.bat`**
+3. Done — start TeraToolbox and play
+
+---
+
+## How to install (step by step)
 
 1. Close TeraToolbox completely (check the system tray near the clock)
-2. Download **shinra-rotation-patch-v1.0.zip** from the [Releases](../../releases/latest) page
-3. Extract the zip anywhere on your computer
+2. Click the big **DOWNLOAD** link above
+3. Extract the zip anywhere on your computer (right-click → Extract All)
 4. Run **install.bat**
 5. Start TeraToolbox again
 
