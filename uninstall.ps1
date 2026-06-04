@@ -91,7 +91,7 @@ if (Test-ToolboxRunning) {
 Write-Host ""
 Write-Host "  Restoring original files..."
 try {
-    foreach ($f in @("DamageMeter.dll","ShinraMeter.deps.json","module.json")) {
+    foreach ($f in @("DamageMeter.dll","ShinraMeter.deps.json","module.json","manifest.json")) {
         $bak = Join-Path $shinra "$f.prepatch.bak"
         if (Test-Path $bak) {
             Copy-Item $bak (Join-Path $shinra $f) -Force -ErrorAction Stop
@@ -117,7 +117,7 @@ $rot = Join-Path $shinra "ShinraRotationPatch.dll"
 if (Test-Path $rot) { Remove-Item $rot -Force; Write-Host "    removed: ShinraRotationPatch.dll" }
 
 Write-Host "  Removing backups..."
-foreach ($f in @("DamageMeter.dll","ShinraMeter.deps.json","module.json")) {
+foreach ($f in @("DamageMeter.dll","ShinraMeter.deps.json","module.json","manifest.json")) {
     $bak = Join-Path $shinra "$f.prepatch.bak"
     if (Test-Path $bak) { Remove-Item $bak -Force; Write-Host "    removed: $f.prepatch.bak" }
 }

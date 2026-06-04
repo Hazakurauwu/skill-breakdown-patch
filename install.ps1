@@ -101,7 +101,7 @@ if (Test-ToolboxRunning) {
 # 4. Back up originals (only once, so re-running is safe)
 Write-Host ""
 Write-Host "  Backing up original files..."
-foreach ($f in @("DamageMeter.dll","ShinraMeter.deps.json","module.json")) {
+foreach ($f in @("DamageMeter.dll","ShinraMeter.deps.json","module.json","manifest.json")) {
     $src = Join-Path $shinra $f
     $bak = "$src.prepatch.bak"
     if ((Test-Path $src) -and -not (Test-Path $bak)) {
@@ -138,7 +138,7 @@ try {
     exit 1
 }
 
-foreach ($f in @("ShinraRotationPatch.dll","ShinraMeter.deps.json","module.json")) {
+foreach ($f in @("ShinraRotationPatch.dll","ShinraMeter.deps.json","module.json","manifest.json")) {
     Copy-Item (Join-Path $releaseDir $f) (Join-Path $shinra $f) -Force
     Write-Host "    installed: $f"
 }
