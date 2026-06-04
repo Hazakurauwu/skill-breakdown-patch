@@ -19,12 +19,7 @@ That's it. Play any fight and the data will appear on enragedon.com automaticall
 
 ## How to uninstall
 
-Go to your `TeraToolbox\mods\ShinraMeter\` folder and:
-
-- Rename `DamageMeter.dll.prepatch.bak` to `DamageMeter.dll`
-- Rename `ShinraMeter.deps.json.prepatch.bak` to `ShinraMeter.deps.json`
-- Rename `module.json.prepatch.bak` to `module.json`
-- Delete `ShinraRotationPatch.dll`
+Run **uninstall.bat** (included in the zip). It restores your original files automatically and removes everything the patch added.
 
 ---
 
