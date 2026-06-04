@@ -138,6 +138,10 @@ if (Test-Path $manPath) {
         $man = Get-Content $manPath -Raw | ConvertFrom-Json
         $newHash = (Get-FileHash (Join-Path $shinra "DamageMeter.dll") -Algorithm SHA256).Hash.ToLower()
         if ($man.files.PSObject.Properties.Name -contains 'DamageMeter.dll') { $man.files.'DamageMeter.dll' = $newHash }
+        # drop stale entry from the old external-DLL version of this patch
+        if ($man.files.PSObject.Properties.Name -contains 'ShinraRotationPatch.dll') {
+            $man.files.PSObject.Properties.Remove('ShinraRotationPatch.dll')
+        }
         $json = $man | ConvertTo-Json -Depth 30
         [System.IO.File]::WriteAllText($manPath, $json, (New-Object System.Text.UTF8Encoding($false)))
         Write-Host "    manifest updated for DamageMeter.dll"
