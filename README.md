@@ -47,7 +47,7 @@ After playing a fight with the patch installed, the encounter page on enragedon.
 
 ## Only sent to enragedon.com
 
-The hit-by-hit data is only attached to uploads going to **enragedon.com**. Other upload targets (such as teralogs) keep getting the normal, lighter payload they already accepted, so nothing breaks for them.
+The hit-by-hit data is only attached to uploads going to **enragedon.com**. Any other upload targets you have configured keep getting the normal, lighter payload, so nothing changes for them.
 
 ---
 
