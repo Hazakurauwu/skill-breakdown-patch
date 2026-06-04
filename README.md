@@ -6,20 +6,21 @@ This patch adds hit-by-hit skill tracking to ShinraMeter for TeraToolbox (Asura)
 
 ## How to install
 
-1. Download **shinra-rotation-patch-v1.0.zip** from the [Releases](../../releases/latest) page
-2. Extract the zip anywhere on your computer
-3. Run **install.bat**
-4. Restart TeraToolbox
+1. Close TeraToolbox completely (check the system tray near the clock)
+2. Download **shinra-rotation-patch-v1.0.zip** from the [Releases](../../releases/latest) page
+3. Extract the zip anywhere on your computer
+4. Run **install.bat**
+5. Start TeraToolbox again
 
-The installer will find your TeraToolbox folder automatically. If it can't find it, it will ask you where it is. Before replacing anything, it makes a backup of your original files.
+The installer finds your TeraToolbox automatically. If it can't, a window opens so you can pick the folder yourself. It asks for administrator rights (needed if your toolbox is in Program Files) and backs up your original files before replacing anything.
 
-That's it. Play any fight and the data will appear on enragedon.com automatically.
+That's it. Play any fight and the data shows up on enragedon.com automatically.
 
 ---
 
 ## How to uninstall
 
-Run **uninstall.bat** (included in the zip). It restores your original files automatically and removes everything the patch added.
+Close TeraToolbox, then run **uninstall.bat** (included in the zip). It restores your original files automatically and removes everything the patch added.
 
 ---
 
