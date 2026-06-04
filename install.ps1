@@ -142,9 +142,42 @@ try {
     exit 1
 }
 
-foreach ($f in @("ShinraRotationPatch.dll","ShinraMeter.deps.json","module.json","manifest.json")) {
+foreach ($f in @("ShinraRotationPatch.dll","ShinraMeter.deps.json","module.json")) {
     Copy-Item (Join-Path $releaseDir $f) (Join-Path $shinra $f) -Force
     Write-Host "    installed: $f"
+}
+
+# Regenerate manifest.json IN PLACE. The toolbox checks every mod file by
+# SHA-256 against this manifest. We must NOT ship a fixed manifest (its hashes
+# are tied to one meter build); instead we recompute each hash from the files
+# actually on this PC, so it works no matter which base version they have.
+Write-Host ""
+Write-Host "  Updating manifest..."
+$manifestPath = Join-Path $shinra "manifest.json"
+if (Test-Path $manifestPath) {
+    try {
+        $man = Get-Content $manifestPath -Raw | ConvertFrom-Json
+        foreach ($prop in @($man.files.PSObject.Properties)) {
+            $fp = Join-Path $shinra $prop.Name
+            if (Test-Path $fp) {
+                $prop.Value = (Get-FileHash $fp -Algorithm SHA256).Hash.ToLower()
+            }
+        }
+        $rotHash = (Get-FileHash (Join-Path $shinra "ShinraRotationPatch.dll") -Algorithm SHA256).Hash.ToLower()
+        if ($man.files.PSObject.Properties.Name -contains 'ShinraRotationPatch.dll') {
+            $man.files.'ShinraRotationPatch.dll' = $rotHash
+        } else {
+            $man.files | Add-Member -NotePropertyName 'ShinraRotationPatch.dll' -NotePropertyValue $rotHash
+        }
+        $json = $man | ConvertTo-Json -Depth 20
+        # UTF-8 WITHOUT BOM - a BOM breaks the toolbox JSON parser
+        [System.IO.File]::WriteAllText($manifestPath, $json, (New-Object System.Text.UTF8Encoding($false)))
+        Write-Host "    manifest updated (hashes recomputed for this install)"
+    } catch {
+        Write-Host "    WARNING: could not update manifest: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "    no manifest.json found (skipping)" -ForegroundColor Yellow
 }
 
 Write-Host ""
