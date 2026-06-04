@@ -1,5 +1,4 @@
-# Self-elevate to admin. ShinraMeter often lives under Program Files, which
-# needs admin rights to modify.
+# Self-elevate to admin (ShinraMeter may live under Program Files).
 $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Start-Process powershell.exe -Verb RunAs -ArgumentList @(
@@ -32,46 +31,34 @@ Write-Host "  ============================================" -ForegroundColor Gre
 Write-Host "   ShinraMeter Rotation Patch - Installer" -ForegroundColor Green
 Write-Host "  ============================================" -ForegroundColor Green
 Write-Host ""
+Write-Host "   IMPORTANT: close TeraToolbox completely before continuing." -ForegroundColor Yellow
+Write-Host ""
 
-# Patch files live in a 'release' subfolder, or right next to this script
-# (depends on how the zip was extracted). Accept both.
+# Patch DLL lives in a 'release' subfolder, or next to this script.
 $releaseDir = Join-Path $PSScriptRoot "release"
 if (-not (Test-Path "$releaseDir\DamageMeter.dll")) { $releaseDir = $PSScriptRoot }
 if (-not (Test-Path "$releaseDir\DamageMeter.dll")) {
-    Write-Host "  ERROR: could not find the patch files (DamageMeter.dll)." -ForegroundColor Red
-    Write-Host "  Make sure you extracted the WHOLE zip and that install.bat is" -ForegroundColor Red
-    Write-Host "  in the same place as the .dll files. Then run install.bat again." -ForegroundColor Red
-    Read-Host "  Press Enter to exit"
-    exit 1
+    Write-Host "  ERROR: could not find DamageMeter.dll next to this script." -ForegroundColor Red
+    Write-Host "  Make sure you extracted the WHOLE zip." -ForegroundColor Red
+    Read-Host "  Press Enter to exit"; exit 1
 }
 
-# 1. Auto-detect in common locations (including Program Files)
+# 1. Auto-detect, with confirm + folder picker fallback
 $common = @(
-    "$env:USERPROFILE\Desktop\TeraToolbox",
-    "$env:USERPROFILE\Desktop\TeraToolbox Private",
-    "$env:USERPROFILE\Documents\TeraToolbox",
-    "$env:USERPROFILE\Downloads\TeraToolbox",
-    "${env:ProgramFiles(x86)}\TeraToolbox",
-    "$env:ProgramFiles\TeraToolbox",
-    "C:\TeraToolbox",
-    "C:\TeraToolbox Private",
-    "D:\TeraToolbox"
+    "$env:USERPROFILE\Desktop\TeraToolbox","$env:USERPROFILE\Desktop\TeraToolbox Private",
+    "$env:USERPROFILE\Documents\TeraToolbox","$env:USERPROFILE\Downloads\TeraToolbox",
+    "${env:ProgramFiles(x86)}\TeraToolbox","$env:ProgramFiles\TeraToolbox",
+    "C:\TeraToolbox","C:\TeraToolbox Private","D:\TeraToolbox"
 )
 $shinra = $null
-foreach ($c in $common) {
-    $shinra = Find-ShinraFolder $c
-    if ($shinra) { break }
-}
+foreach ($c in $common) { $shinra = Find-ShinraFolder $c; if ($shinra) { break } }
 
-# 2. Confirm the detected folder, or open a folder picker
 if ($shinra) {
     Write-Host "  Found ShinraMeter at:" -ForegroundColor Cyan
-    Write-Host "    $shinra"
-    Write-Host ""
+    Write-Host "    $shinra"; Write-Host ""
     $ans = Read-Host "  Use this folder? Press Enter for yes, or type N to choose another"
     if ($ans -match '^[nN]') { $shinra = $null }
 }
-
 if (-not $shinra) {
     Write-Host ""
     Write-Host "  A window will open. Select your TeraToolbox folder" -ForegroundColor Yellow
@@ -83,40 +70,36 @@ if (-not $shinra) {
         $dlg.ShowNewFolderButton = $false
         if ($dlg.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) {
             Write-Host "  Cancelled. Nothing was changed." -ForegroundColor Red
-            Read-Host "  Press Enter to exit"
-            exit 1
+            Read-Host "  Press Enter to exit"; exit 1
         }
         $shinra = Find-ShinraFolder $dlg.SelectedPath
-        if (-not $shinra) {
-            Write-Host "  No ShinraMeter (DamageMeter.dll) found there. Try again." -ForegroundColor Red
-        }
+        if (-not $shinra) { Write-Host "  No ShinraMeter found there. Try again." -ForegroundColor Red }
     }
     Write-Host "  Using: $shinra" -ForegroundColor Cyan
 }
 
-# 3. Make sure the toolbox is closed before we touch the files
 if (Test-ToolboxRunning) {
     Write-Host ""
-    Write-Host "  TeraToolbox (or the meter) seems to be running." -ForegroundColor Yellow
-    Write-Host "  Please close it completely, then press Enter to continue." -ForegroundColor Yellow
+    Write-Host "  TeraToolbox seems to be running. Close it completely," -ForegroundColor Yellow
+    Write-Host "  then press Enter to continue." -ForegroundColor Yellow
     Read-Host
 }
 
-# 4. Back up originals (only once, so re-running is safe)
+# 2. Back up originals (once)
 Write-Host ""
 Write-Host "  Backing up original files..."
-foreach ($f in @("DamageMeter.dll","ShinraMeter.deps.json","module.json","manifest.json")) {
-    $src = Join-Path $shinra $f
-    $bak = "$src.prepatch.bak"
-    if ((Test-Path $src) -and -not (Test-Path $bak)) {
-        Copy-Item $src $bak -Force
-        Write-Host "    backed up: $f"
-    }
+foreach ($f in @("DamageMeter.dll","module.json","manifest.json")) {
+    $src = Join-Path $shinra $f; $bak = "$src.prepatch.bak"
+    if ((Test-Path $src) -and -not (Test-Path $bak)) { Copy-Item $src $bak -Force; Write-Host "    backed up: $f" }
 }
 
-# 5. Install. DamageMeter.dll is the file that gets locked while the meter runs.
+# Clean any leftover from the old (external-DLL) version of this patch
+$oldDll = Join-Path $shinra "ShinraRotationPatch.dll"
+if (Test-Path $oldDll) { Remove-Item $oldDll -Force; Write-Host "    removed old ShinraRotationPatch.dll" }
+
+# 3. Install the merged DamageMeter.dll
 Write-Host ""
-Write-Host "  Installing patch files..."
+Write-Host "  Installing patched DamageMeter.dll..."
 try {
     Copy-Item "$releaseDir\DamageMeter.dll" (Join-Path $shinra "DamageMeter.dll") -Force -ErrorAction Stop
     Write-Host "    installed: DamageMeter.dll"
@@ -126,65 +109,46 @@ try {
     Write-Host "  ============================================" -ForegroundColor Red
     if ($msg -match "being used|another process|0x80070020|in use") {
         Write-Host "   TeraToolbox is still open and locking the file." -ForegroundColor Red
-        Write-Host ""
-        Write-Host "   Close it completely (check the system tray near" -ForegroundColor Red
-        Write-Host "   the clock), then run this installer again." -ForegroundColor Red
+        Write-Host "   Close it completely, then run this again." -ForegroundColor Red
     } elseif ($msg -match "denied|Unauthorized") {
-        Write-Host "   Windows blocked writing to that folder." -ForegroundColor Red
-        Write-Host "   Try right-clicking install.bat and choosing" -ForegroundColor Red
-        Write-Host "   'Run as administrator'." -ForegroundColor Red
-    } else {
-        Write-Host "   $msg" -ForegroundColor Red
-    }
+        Write-Host "   Windows blocked writing. Right-click install.bat ->" -ForegroundColor Red
+        Write-Host "   Run as administrator." -ForegroundColor Red
+    } else { Write-Host "   $msg" -ForegroundColor Red }
     Write-Host "  ============================================" -ForegroundColor Red
-    Write-Host ""
-    Read-Host "  Press Enter to exit"
-    exit 1
+    Read-Host "  Press Enter to exit"; exit 1
 }
 
-foreach ($f in @("ShinraRotationPatch.dll","ShinraMeter.deps.json","module.json")) {
-    Copy-Item (Join-Path $releaseDir $f) (Join-Path $shinra $f) -Force
-    Write-Host "    installed: $f"
-}
-
-# Regenerate manifest.json IN PLACE. The toolbox checks every mod file by
-# SHA-256 against this manifest. We must NOT ship a fixed manifest (its hashes
-# are tied to one meter build); instead we recompute each hash from the files
-# actually on this PC, so it works no matter which base version they have.
-Write-Host ""
-Write-Host "  Updating manifest..."
-$manifestPath = Join-Path $shinra "manifest.json"
-if (Test-Path $manifestPath) {
+# 4. Turn OFF auto-update in module.json (so the toolbox won't overwrite the patch)
+$modPath = Join-Path $shinra "module.json"
+if (Test-Path $modPath) {
     try {
-        $man = Get-Content $manifestPath -Raw | ConvertFrom-Json
-        foreach ($prop in @($man.files.PSObject.Properties)) {
-            $fp = Join-Path $shinra $prop.Name
-            if (Test-Path $fp) {
-                $prop.Value = (Get-FileHash $fp -Algorithm SHA256).Hash.ToLower()
-            }
-        }
-        $rotHash = (Get-FileHash (Join-Path $shinra "ShinraRotationPatch.dll") -Algorithm SHA256).Hash.ToLower()
-        if ($man.files.PSObject.Properties.Name -contains 'ShinraRotationPatch.dll') {
-            $man.files.'ShinraRotationPatch.dll' = $rotHash
-        } else {
-            $man.files | Add-Member -NotePropertyName 'ShinraRotationPatch.dll' -NotePropertyValue $rotHash
-        }
-        $json = $man | ConvertTo-Json -Depth 20
-        # UTF-8 WITHOUT BOM - a BOM breaks the toolbox JSON parser
-        [System.IO.File]::WriteAllText($manifestPath, $json, (New-Object System.Text.UTF8Encoding($false)))
-        Write-Host "    manifest updated (hashes recomputed for this install)"
-    } catch {
-        Write-Host "    WARNING: could not update manifest: $($_.Exception.Message)" -ForegroundColor Yellow
-    }
-} else {
-    Write-Host "    no manifest.json found (skipping)" -ForegroundColor Yellow
+        $mod = Get-Content $modPath -Raw | ConvertFrom-Json
+        if ($mod.PSObject.Properties.Name -contains 'disableAutoUpdate') { $mod.disableAutoUpdate = $true }
+        else { $mod | Add-Member -NotePropertyName disableAutoUpdate -NotePropertyValue $true }
+        $json = $mod | ConvertTo-Json -Depth 20
+        [System.IO.File]::WriteAllText($modPath, $json, (New-Object System.Text.UTF8Encoding($false)))
+        Write-Host "    auto-update disabled in module.json"
+    } catch { Write-Host "    WARNING: could not edit module.json: $($_.Exception.Message)" -ForegroundColor Yellow }
+}
+
+# 5. Recompute manifest.json hash for the new DamageMeter.dll (toolbox validates this)
+$manPath = Join-Path $shinra "manifest.json"
+if (Test-Path $manPath) {
+    try {
+        $man = Get-Content $manPath -Raw | ConvertFrom-Json
+        $newHash = (Get-FileHash (Join-Path $shinra "DamageMeter.dll") -Algorithm SHA256).Hash.ToLower()
+        if ($man.files.PSObject.Properties.Name -contains 'DamageMeter.dll') { $man.files.'DamageMeter.dll' = $newHash }
+        $json = $man | ConvertTo-Json -Depth 30
+        [System.IO.File]::WriteAllText($manPath, $json, (New-Object System.Text.UTF8Encoding($false)))
+        Write-Host "    manifest updated for DamageMeter.dll"
+    } catch { Write-Host "    WARNING: could not update manifest: $($_.Exception.Message)" -ForegroundColor Yellow }
 }
 
 Write-Host ""
 Write-Host "  ============================================" -ForegroundColor Green
 Write-Host "   Done! Start TeraToolbox to use the patch." -ForegroundColor Green
 Write-Host ""
-Write-Host "   Your originals are saved as *.prepatch.bak"
+Write-Host "   Originals saved as *.prepatch.bak"
 Write-Host "   To undo, run uninstall.bat"
 Write-Host "  ============================================" -ForegroundColor Green
 Write-Host ""

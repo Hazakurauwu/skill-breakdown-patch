@@ -32,36 +32,23 @@ Write-Host "   ShinraMeter Rotation Patch - Uninstaller" -ForegroundColor Cyan
 Write-Host "  ============================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Auto-detect by looking for our backup
 $common = @(
-    "$env:USERPROFILE\Desktop\TeraToolbox",
-    "$env:USERPROFILE\Desktop\TeraToolbox Private",
-    "$env:USERPROFILE\Documents\TeraToolbox",
-    "$env:USERPROFILE\Downloads\TeraToolbox",
-    "${env:ProgramFiles(x86)}\TeraToolbox",
-    "$env:ProgramFiles\TeraToolbox",
-    "C:\TeraToolbox",
-    "C:\TeraToolbox Private",
-    "D:\TeraToolbox"
+    "$env:USERPROFILE\Desktop\TeraToolbox","$env:USERPROFILE\Desktop\TeraToolbox Private",
+    "$env:USERPROFILE\Documents\TeraToolbox","$env:USERPROFILE\Downloads\TeraToolbox",
+    "${env:ProgramFiles(x86)}\TeraToolbox","$env:ProgramFiles\TeraToolbox",
+    "C:\TeraToolbox","C:\TeraToolbox Private","D:\TeraToolbox"
 )
 $shinra = $null
-foreach ($c in $common) {
-    $shinra = Find-PatchedFolder $c
-    if ($shinra) { break }
-}
+foreach ($c in $common) { $shinra = Find-PatchedFolder $c; if ($shinra) { break } }
 
 if ($shinra) {
     Write-Host "  Found patched ShinraMeter at:" -ForegroundColor Cyan
-    Write-Host "    $shinra"
-    Write-Host ""
+    Write-Host "    $shinra"; Write-Host ""
     $ans = Read-Host "  Restore this folder? Press Enter for yes, or type N to choose another"
     if ($ans -match '^[nN]') { $shinra = $null }
 }
-
 if (-not $shinra) {
-    Write-Host ""
-    Write-Host "  A window will open. Select your TeraToolbox folder" -ForegroundColor Yellow
-    Write-Host "  (or the ShinraMeter folder itself) and click OK." -ForegroundColor Yellow
+    Write-Host "  A window will open. Select your TeraToolbox folder and click OK." -ForegroundColor Yellow
     Start-Sleep -Milliseconds 400
     while (-not $shinra) {
         $dlg = New-Object System.Windows.Forms.FolderBrowserDialog
@@ -69,57 +56,41 @@ if (-not $shinra) {
         $dlg.ShowNewFolderButton = $false
         if ($dlg.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) {
             Write-Host "  Cancelled. Nothing was changed." -ForegroundColor Red
-            Read-Host "  Press Enter to exit"
-            exit 1
+            Read-Host "  Press Enter to exit"; exit 1
         }
         $shinra = Find-PatchedFolder $dlg.SelectedPath
-        if (-not $shinra) {
-            Write-Host "  No backup (DamageMeter.dll.prepatch.bak) found there." -ForegroundColor Red
-            Write-Host "  The patch may not be installed in that folder. Try again." -ForegroundColor Red
-        }
+        if (-not $shinra) { Write-Host "  No backup found there. Try again." -ForegroundColor Red }
     }
     Write-Host "  Using: $shinra" -ForegroundColor Cyan
 }
 
 if (Test-ToolboxRunning) {
     Write-Host ""
-    Write-Host "  TeraToolbox seems to be running. Close it completely," -ForegroundColor Yellow
-    Write-Host "  then press Enter to continue." -ForegroundColor Yellow
+    Write-Host "  TeraToolbox seems to be running. Close it, then press Enter." -ForegroundColor Yellow
     Read-Host
 }
 
 Write-Host ""
 Write-Host "  Restoring original files..."
 try {
-    foreach ($f in @("DamageMeter.dll","ShinraMeter.deps.json","module.json","manifest.json")) {
+    foreach ($f in @("DamageMeter.dll","module.json","manifest.json")) {
         $bak = Join-Path $shinra "$f.prepatch.bak"
-        if (Test-Path $bak) {
-            Copy-Item $bak (Join-Path $shinra $f) -Force -ErrorAction Stop
-            Write-Host "    restored: $f"
-        }
+        if (Test-Path $bak) { Copy-Item $bak (Join-Path $shinra $f) -Force -ErrorAction Stop; Write-Host "    restored: $f" }
     }
 } catch {
-    $msg = $_.Exception.Message
     Write-Host ""
-    if ($msg -match "being used|another process|0x80070020|in use") {
-        Write-Host "  TeraToolbox is still open and locking the file." -ForegroundColor Red
-        Write-Host "  Close it completely, then run this again." -ForegroundColor Red
-    } else {
-        Write-Host "  ERROR: $msg" -ForegroundColor Red
-    }
-    Write-Host ""
-    Read-Host "  Press Enter to exit"
-    exit 1
+    if ($_.Exception.Message -match "being used|another process|in use") {
+        Write-Host "  TeraToolbox is still open. Close it and run this again." -ForegroundColor Red
+    } else { Write-Host "  ERROR: $($_.Exception.Message)" -ForegroundColor Red }
+    Read-Host "  Press Enter to exit"; exit 1
 }
 
-Write-Host "  Removing patch files..."
 $rot = Join-Path $shinra "ShinraRotationPatch.dll"
 if (Test-Path $rot) { Remove-Item $rot -Force; Write-Host "    removed: ShinraRotationPatch.dll" }
 
-Write-Host "  Removing backups..."
-foreach ($f in @("DamageMeter.dll","ShinraMeter.deps.json","module.json","manifest.json")) {
+foreach ($f in @("DamageMeter.dll","module.json","manifest.json")) {
     $bak = Join-Path $shinra "$f.prepatch.bak"
-    if (Test-Path $bak) { Remove-Item $bak -Force; Write-Host "    removed: $f.prepatch.bak" }
+    if (Test-Path $bak) { Remove-Item $bak -Force }
 }
 
 Write-Host ""

@@ -39,16 +39,19 @@ Write-Host "==> building helper against patched reference" -ForegroundColor Cyan
 dotnet build $helper -c Release -v quiet | Out-Null
 $helperDll = Join-Path $helper "bin\Release\ShinraRotationPatch.dll"
 
-Write-Host "==> pass2: inject Enrich call" -ForegroundColor Cyan
+Write-Host "==> mergeinject: merge RotationEnricher into DamageMeter + inject call" -ForegroundColor Cyan
 $patched = Join-Path $work "DamageMeter.patched.dll"
-dotnet $patcherDll pass2 $p1 $helperDll $patched
+dotnet $patcherDll mergeinject $p1 $helperDll $patched
+
+Write-Host "==> verify merged dll is self-contained" -ForegroundColor Cyan
+dotnet $patcherDll verify $patched
 
 Write-Host "==> assembling $OutDir" -ForegroundColor Cyan
 Copy-Item "$MeterDir\*" $OutDir -Recurse -Force
 # keep the pristine original for rollback
 Copy-Item $inputDll (Join-Path $OutDir "DamageMeter.dll.orig.bak") -Force
 Copy-Item $patched   (Join-Path $OutDir "DamageMeter.dll") -Force
-Copy-Item $helperDll (Join-Path $OutDir "ShinraRotationPatch.dll") -Force
+# no separate helper DLL anymore -- it is merged into DamageMeter.dll
 
 Write-Host "==> regenerating manifest.json (SHA-256)" -ForegroundColor Cyan
 $manifestPath = Join-Path $OutDir "manifest.json"
@@ -56,13 +59,8 @@ $man = Get-Content $manifestPath -Raw | ConvertFrom-Json
 function FileHash256($p) { (Get-FileHash -Algorithm SHA256 -Path $p).Hash.ToLower() }
 
 $dmHash = FileHash256 (Join-Path $OutDir "DamageMeter.dll")
-$hpHash = FileHash256 (Join-Path $OutDir "ShinraRotationPatch.dll")
 $man.files.'DamageMeter.dll' = $dmHash
-if ($man.files.PSObject.Properties.Name -contains 'ShinraRotationPatch.dll') {
-    $man.files.'ShinraRotationPatch.dll' = $hpHash
-} else {
-    $man.files | Add-Member -NotePropertyName 'ShinraRotationPatch.dll' -NotePropertyValue $hpHash
-}
+# helper is merged into DamageMeter.dll now -- no separate entry needed
 
 # re-emit with tabs to match the original manifest style
 $json = $man | ConvertTo-Json -Depth 10
@@ -71,8 +69,7 @@ Set-Content -Path $manifestPath -Value $json -Encoding utf8
 
 Write-Host ""
 Write-Host "DONE." -ForegroundColor Green
-Write-Host ("  DamageMeter.dll       SHA-256 = " + $dmHash)
-Write-Host ("  ShinraRotationPatch   SHA-256 = " + $hpHash)
+Write-Host ("  DamageMeter.dll (merged)  SHA-256 = " + $dmHash)
 Write-Host ("  output: " + $OutDir)
 Write-Host ""
-Write-Host "Next: edit $OutDir\module.json -> 'servers' to point at your GitHub raw, then push the folder."
+Write-Host "The DamageMeter.dll is self-contained (RotationEnricher merged in)."

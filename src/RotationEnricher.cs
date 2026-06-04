@@ -1,20 +1,24 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using DamageMeter;
 using DamageMeter.TeraDpsApi;
 using Data;
 using Tera.Game;
 
-// the injected call lives in DamageMeter.dll, so it must be allowed to reach our internal Enrich
+// Compiled against the pass1 DamageMeter (which grants IVT to this assembly so we
+// can see internal ExtendedStats). After the build, this whole type is MERGED into
+// DamageMeter.dll so there is no separate assembly to load at runtime.
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("DamageMeter")]
 
 namespace ShinraRotationPatch
 {
-    // Injected into DamageMeter.DataExporter.AutomatedExport(NpcEntity, AbnormalityStorage),
+    // Injected call lives in DamageMeter.DataExporter.AutomatedExport(NpcEntity, AbnormalityStorage),
     // right after the "stats == null" guard. Fills Members.dealtSkillLog with the chronological
     // hit-by-hit dealt-skill timeline, mirroring DamageMeter.Exporter.JsonExporter.JsonSave so the
     // upload POST (EncounterBase serialization) carries the rotation. Never throws into the caller.
+    //
+    // No LINQ / no lambdas on purpose: the type gets merged into DamageMeter.dll by IL rewriting,
+    // and avoiding compiler-generated closures/display-classes keeps that merge simple and reliable.
     public static class RotationEnricher
     {
         internal static void Enrich(ExtendedStats stats)
@@ -33,9 +37,27 @@ namespace ShinraRotationPatch
                     Player player = PacketProcessor.Instance.PlayerTracker.Get(member.playerServerId, member.playerId);
                     if (player == null) continue;
 
-                    var dealt = stats.AllSkills.GetSkillsDealt(player.User, null, true);
-                    foreach (var sk in dealt.OrderBy(x => x.Time))
+                    // collect dealt skills into a list we can sort without LINQ
+                    var list = new List<DamageMeter.Database.Structures.Skill>();
+                    foreach (var s in stats.AllSkills.GetSkillsDealt(player.User, null, true))
+                        list.Add(s);
+
+                    // insertion sort by Time (ascending) -- stable, no lambdas
+                    for (int a = 1; a < list.Count; a++)
                     {
+                        DamageMeter.Database.Structures.Skill key = list[a];
+                        int b = a - 1;
+                        while (b >= 0 && list[b].Time > key.Time)
+                        {
+                            list[b + 1] = list[b];
+                            b--;
+                        }
+                        list[b + 1] = key;
+                    }
+
+                    for (int i = 0; i < list.Count; i++)
+                    {
+                        DamageMeter.Database.Structures.Skill sk = list[i];
                         var js = new JsonSkill
                         {
                             time = (int)((sk.Time - firstTick) / 10000),

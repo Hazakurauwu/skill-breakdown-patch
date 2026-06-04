@@ -29,11 +29,11 @@ Close TeraToolbox, then run **uninstall.bat** (included in the zip). It restores
 Yes. The source code is fully visible in this repo:
 
 - [`src/RotationEnricher.cs`](src/RotationEnricher.cs) is the code that reads the skill hits and adds them to the upload
-- [`src/Patcher.cs`](src/Patcher.cs) is the tool that injects the call into ShinraMeter
+- [`src/Patcher.cs`](src/Patcher.cs) is the tool that builds the patched DamageMeter.dll
 
 The patch only adds one thing to the upload: the list of skill hits that ShinraMeter already tracks locally. Nothing else is changed and nothing is sent anywhere other than enragedon.com.
 
-Auto-update is disabled in `module.json` so TeraToolbox does not overwrite the patched files.
+The extra code is merged directly into `DamageMeter.dll` (a single self-contained file), so it works on any ShinraMeter build without depending on how that build loads assemblies. The installer also turns off auto-update in `module.json` so TeraToolbox does not overwrite the patched file.
 
 ---
 
