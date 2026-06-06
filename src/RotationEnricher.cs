@@ -21,8 +21,8 @@ namespace ShinraRotationPatch
     // and avoiding compiler-generated closures/display-classes keeps that merge simple and reliable.
     public static class RotationEnricher
     {
-        // Only this host receives the heavy hit-by-hit dealtSkillLog. Other upload
-        // targets (e.g. teralogs) reject the oversized payload, so we strip it for them.
+        // Only this host receives the heavy hit-by-hit dealtSkillLog.
+        // Other upload targets strip it to avoid oversized payloads.
         private const string KeepHost = "enragedon";
 
         // Last stats captured in AutomatedExport, so we can re-fill the log per server.
