@@ -1,4 +1,4 @@
-# ShinraMeter Rotation Patch
+# Skill Breakdown Patch
 
 This patch adds hit-by-hit skill tracking to ShinraMeter (any TeraToolbox build). Once installed, your encounters on [enragedon.com](https://enragedon.com) will show a **Skill Breakdown** timeline and **DPS Graph** tab.
 
@@ -6,7 +6,7 @@ This patch adds hit-by-hit skill tracking to ShinraMeter (any TeraToolbox build)
 
 # ⬇️⬇️ DOWNLOAD ⬇️⬇️
 
-## 👉 [**CLICK HERE TO DOWNLOAD THE PATCH**](https://github.com/Hazakurauwu/shinra-rotation-patch/releases/latest/download/shinra-rotation-patch-v1.0.zip) 👈
+## 👉 [**CLICK HERE TO DOWNLOAD THE PATCH**](https://github.com/Hazakurauwu/skill-breakdown-patch/releases/latest/download/skill-breakdown-patch-v1.0.zip) 👈
 
 The download starts as soon as you click. After it finishes:
 
