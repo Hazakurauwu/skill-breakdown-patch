@@ -2,6 +2,12 @@
 
 This patch adds hit-by-hit skill tracking to ShinraMeter (any TeraToolbox build). Once installed, your encounters on [enragedon.com](https://enragedon.com) will show a **Skill Breakdown** timeline and **DPS Graph** tab.
 
+### Skill Breakdown — every hit on a timeline
+![Skill Breakdown timeline](docs/skill-breakdown.png)
+
+### DPS Graph — how the fight actually went
+![DPS Graph](docs/dps-graph.png)
+
 ---
 
 # ⬇️⬇️ DOWNLOAD ⬇️⬇️
@@ -55,7 +61,7 @@ After playing a fight with the patch installed, the encounter page on enragedon.
 
 **Skill Breakdown** shows each skill on its own row with every hit placed on a timeline. You can zoom in, drag to scroll, and click a skill to focus on it.
 
-**DPS Graph** shows how each player's DPS changed over the course of the fight, with an optional boss HP line.
+**DPS Graph** shows how each player's DPS changed over the course of the fight. Switch between a running average and rolling 10s / 30s / 1m windows to spot burst phases, toggle players on and off, and overlay the boss HP line. Deaths are marked right on the curve.
 
 ## Only sent to enragedon.com
 
