@@ -71,7 +71,18 @@ function Find-ShinraFolders {
             if (-not $found.Contains($dir)) { [void]$found.Add($dir) }
         }
     }
-    return $found
+    # The leading comma is load-bearing, not style: PowerShell auto-unwraps a
+    # single-item collection into a bare scalar the instant it crosses a
+    # `return`/pipeline boundary -- with exactly one folder found, callers
+    # got back the STRING itself instead of a 1-item list. $allHits[0] on a
+    # string indexes its first CHARACTER, not "the first item" -- silently
+    # producing the drive letter alone ('C') as the install target. Real
+    # report 2026-09-14: that 'C' then resolved relative to the elevated
+    # process's System32 working directory, failing on
+    # 'C:\WINDOWS\system32\C\DamageMeter.dll'. The comma forces this to stay
+    # a real array for 0, 1, or many results -- verified against all three
+    # counts before shipping this fix.
+    return ,$found
 }
 
 # A single folder version of the search above, used by the manual
