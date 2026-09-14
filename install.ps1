@@ -9,6 +9,22 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 
 Add-Type -AssemblyName System.Windows.Forms
 
+# Safety net for the whole script: without this, any unhandled error (a
+# permission-denied folder deep in a scan, a JSON parse failure, anything)
+# closes this elevated window instantly with zero message -- the person
+# running it just sees the installer vanish for no visible reason. This
+# guarantees they always see what went wrong before the window closes.
+trap {
+    Write-Host ""
+    Write-Host "  ============================================" -ForegroundColor Red
+    Write-Host "   Unexpected error, installer stopped:" -ForegroundColor Red
+    Write-Host "   $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "  ============================================" -ForegroundColor Red
+    Write-Host ""
+    Read-Host "  Press Enter to exit"
+    exit 1
+}
+
 # Classic System.Windows.Forms.FolderBrowserDialog (SHBrowseForFolder under
 # the hood) has no address bar at all -- you can't type or paste a path into
 # it, only click through the tree. This uses the standard workaround: the
@@ -24,6 +40,11 @@ function Select-FolderDialog {
     $dlg.FileName = "Select Folder"
     $dlg.Filter = "Folders|`n"
     if ($dlg.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { return $null }
+    # Pasting a full folder path directly into the box and pressing Enter
+    # can leave that exact path in FileName on some Windows builds (rather
+    # than navigating into it first) -- use it as-is when it's already a
+    # real folder, otherwise fall back to stripping the placeholder name.
+    if (Test-Path $dlg.FileName -PathType Container) { return $dlg.FileName }
     return [System.IO.Path]::GetDirectoryName($dlg.FileName)
 }
 
@@ -37,7 +58,14 @@ function Find-ShinraFolders {
     $found = New-Object System.Collections.Generic.List[string]
     foreach ($base in $bases) {
         if ([string]::IsNullOrWhiteSpace($base) -or -not (Test-Path $base)) { continue }
-        $hits = Get-ChildItem -Path $base -Filter "DamageMeter.dll" -Recurse -File -ErrorAction SilentlyContinue
+        try {
+            $hits = Get-ChildItem -Path $base -Filter "DamageMeter.dll" -Recurse -File -ErrorAction SilentlyContinue
+        } catch {
+            # One bad subfolder under this base (a locked/broken cloud-sync
+            # placeholder, a restricted app-container, whatever) must not
+            # abort scanning the rest of the bases -- skip it and continue.
+            continue
+        }
         foreach ($h in $hits) {
             $dir = $h.Directory.FullName
             if (-not $found.Contains($dir)) { [void]$found.Add($dir) }
@@ -102,6 +130,7 @@ $common = @(
     # to install under AppData rather than any of the paths above.
     "$env:APPDATA","$env:LOCALAPPDATA"
 )
+Write-Host "  Scanning your PC for ShinraMeter installs (can take a minute, especially the AppData check)..." -ForegroundColor DarkGray
 $allHits = Find-ShinraFolders $common
 
 $targets = @()
