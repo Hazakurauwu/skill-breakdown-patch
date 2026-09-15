@@ -62,6 +62,27 @@ static class Program
             Console.WriteLine("added Members.dealtSkillLog (List`1 from " + sampleList.GenericType.TypeName + ")");
         }
 
+        // --- add public fields: string dir, string tgtName to JsonSkill ---
+        // dir   = raw HitDirection.ToString() ("Back"/"Front"/"Side"/"Dot"/etc), so the
+        //         backend maps names explicitly instead of trusting an enum ordinal that
+        //         could shift between game/meter versions.
+        // tgtName = resolved display name of the hit's target (NpcEntity.Info.Name for a
+        //         monster, UserEntity.Name for PvP) -- mirrors exactly what SkillLog.xaml.cs
+        //         already shows in the live SkillDealt tab, just serialized this time.
+        {
+            var jsonSkillFields = mod.Types.First(t => t.FullName == "DamageMeter.TeraDpsApi.JsonSkill");
+            if (jsonSkillFields.Fields.Any(f => f.Name == "dir"))
+            {
+                Console.WriteLine("JsonSkill.dir already present, skipping field add");
+            }
+            else
+            {
+                jsonSkillFields.Fields.Add(new FieldDefUser("dir", new FieldSig(mod.CorLibTypes.String), FieldAttributes.Public));
+                jsonSkillFields.Fields.Add(new FieldDefUser("tgtName", new FieldSig(mod.CorLibTypes.String), FieldAttributes.Public));
+                Console.WriteLine("added JsonSkill.dir + JsonSkill.tgtName (String)");
+            }
+        }
+
         // --- add [assembly: InternalsVisibleTo("ShinraRotationPatch")] ---
         AddInternalsVisibleTo(mod, HelperAsmName);
 

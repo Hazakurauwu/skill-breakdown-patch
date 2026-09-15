@@ -99,7 +99,9 @@ namespace ShinraRotationPatch
                             dot = sk.HotDot,
                             skillId = skillDb.GetSkillByPetName(sk.Pet?.Name, player.RaceGenderClass)?.Id ?? sk.SkillId,
                             amount = sk.Amount.ToString(),
-                            target = (sk.Target.Id.Id == ulong.MaxValue) ? null : sk.Target.Id.Id.ToString()
+                            target = (sk.Target.Id.Id == ulong.MaxValue) ? null : sk.Target.Id.Id.ToString(),
+                            dir = sk.Direction.ToString(),
+                            tgtName = ResolveTargetName(sk.Target)
                         };
                         member.dealtSkillLog.Add(js);
                     }
@@ -110,6 +112,19 @@ namespace ShinraRotationPatch
                 try { BasicTeraData.LogError("[ShinraRotationPatch] Enrich failed: " + ex); }
                 catch { /* never let logging break the upload */ }
             }
+        }
+
+        // Same resolution the live SkillLog tab already uses (SkillLog.xaml.cs Update()):
+        // a monster target shows its NpcInfo name, a player target (PvP) shows the account
+        // name. Anything else (no target, e.g. a self-buff) -> null, never throws.
+        static string ResolveTargetName(Entity ent)
+        {
+            if (ent == null) return null;
+            var npc = ent as NpcEntity;
+            if (npc != null) return npc.Info != null ? npc.Info.Name : null;
+            var ue = ent as UserEntity;
+            if (ue != null) return ue.Name;
+            return null;
         }
     }
 }
