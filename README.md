@@ -91,8 +91,7 @@ dotnet publish installer -c Release -o release-installer
 
 Needs .NET SDK 8.0 or newer. The DLLs in `release/` get embedded into the exe at build time.
 
-Full maintenance guide, how to cut a release, how the installer works internally and every
-trap already hit: [`docs/MAINTAINING.md`](docs/MAINTAINING.md). Tests:
-`dotnet run --project installer/SetupTests`.
+Tests: `dotnet run --project installer/SetupTests` (copies real meter folders into `%TEMP%` and
+runs the real install and uninstall code against the copies).
 
 `install.ps1` and `uninstall.ps1` are still here for scripted installs. For everyone else the exe is the way.
