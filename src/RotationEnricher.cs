@@ -75,6 +75,21 @@ namespace ShinraRotationPatch
         // target gets it stripped, because they reject the oversized payload.
         private const string KeepHost = "enragedon";
 
+        // Per-hit attack direction and target name, added in v1.5.
+        //
+        // OFF while we isolate a live report: with v1.1 (which predates these two fields)
+        // the meter tracks party buffs and boss debuffs correctly across a whole dungeon,
+        // and with v1.5 and later the party-wide abnormality tracking dies partway through
+        // a session and never recovers until the meter restarts. Those two fields are the
+        // only functional difference between v1.1 and v1.5, so this flag turns them off
+        // while keeping everything else in this release, including the PlayerTracker
+        // thread fix. Because the upload serializer runs with NullValueHandling.Ignore,
+        // leaving them null makes the wire payload byte-for-byte what v1.1 produced.
+        //
+        // The fields themselves stay declared on JsonSkill either way, so flipping this
+        // back on is a one-line change and needs no schema or backend work.
+        private const bool CaptureHitDetails = false;
+
         // HitDirection is a [Flags] enum, so Enum.ToString() on it is a reflection-driven
         // flag decomposition that allocates a fresh string on every single call: once per
         // hit, thousands of times per fight. Cache it by raw value instead. The text stays
@@ -153,8 +168,8 @@ namespace ShinraRotationPatch
                                 skillId = skillDb.GetSkillByPetName(sk.Pet?.Name, player.RaceGenderClass)?.Id ?? sk.SkillId,
                                 amount = sk.Amount.ToString(),
                                 target = (sk.Target.Id.Id == ulong.MaxValue) ? null : sk.Target.Id.Id.ToString(),
-                                dir = DirName(sk.Direction),
-                                tgtName = ResolveTargetName(sk.Target)
+                                dir = CaptureHitDetails ? DirName(sk.Direction) : null,
+                                tgtName = CaptureHitDetails ? ResolveTargetName(sk.Target) : null
                             };
                             log.Add(js);
                         }
