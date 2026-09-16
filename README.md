@@ -1,77 +1,94 @@
 # Skill Breakdown Patch
 
-This patch adds hit-by-hit skill tracking to ShinraMeter (any TeraToolbox build). Once installed, your encounters on [enragedon.com](https://enragedon.com) will show a **Skill Breakdown** timeline and **DPS Graph** tab.
+Small patch for ShinraMeter that records every single hit you land. Install it once and your runs on [enragedon.com](https://enragedon.com) get two new tabs: **Skill Breakdown** and **DPS Graph**.
 
-### Skill Breakdown — every hit on a timeline
+Works with the ShinraMeter that comes with TeraToolbox and with private server clients that ship their own build (Crazy eSports Classic+ and friends). The installer figures out which one you have.
+
+### Skill Breakdown, every hit on a timeline
 ![Skill Breakdown timeline](docs/skill-breakdown.png)
 
-### DPS Graph — how the fight actually went
+### DPS Graph, how the fight actually went
 ![DPS Graph](docs/dps-graph.png)
 
 ---
 
 # ⬇️⬇️ DOWNLOAD ⬇️⬇️
 
-## 👉 [**CLICK HERE TO DOWNLOAD THE PATCH**](https://github.com/Hazakurauwu/skill-breakdown-patch/releases/latest/download/skill-breakdown-patch-v1.0.zip) 👈
+## 👉 [**CLICK HERE TO DOWNLOAD THE INSTALLER**](https://github.com/Hazakurauwu/skill-breakdown-patch/releases/latest/download/EnragedON-Setup.exe) 👈
 
-The download starts as soon as you click. After it finishes:
-
-1. **Right-click the downloaded zip → Extract All** (don't run it from inside the zip)
-2. Open the extracted folder and **double-click `install.bat`**
-3. Done — start TeraToolbox and play
+One file. Nothing to extract, nothing to configure.
 
 ---
 
-## How to install (step by step)
+## Install in 3 clicks
 
-1. Close TeraToolbox completely (check the system tray near the clock)
-2. Click the big **DOWNLOAD** link above
-3. Extract the zip anywhere on your computer (right-click → Extract All)
-4. Run **install.bat**
-5. Start TeraToolbox again
+**1. Close the game** (and TeraToolbox if you use it). Check the tray next to the clock.
 
-The installer finds your TeraToolbox automatically. If it can't, a window opens so you can pick the folder yourself. It asks for administrator rights (needed if your toolbox is in Program Files) and backs up your original files before replacing anything.
+**2. Run `EnragedON-Setup.exe`.** It scans your PC and lists every meter it finds. Hit **Install** on the one you play with.
 
-That's it. Play any fight and the data shows up on enragedon.com automatically.
+![Installer, pick your meter](docs/setup-home.png)
+
+**3. Let it do its thing.** Backup, patch, and it also kills the meter setting that breaks buff tracking.
+
+![Installer doing the work](docs/setup-installing.png)
+
+Start the game, clear a dungeon, done. Your fight shows up on the site with the new tabs.
+
+![All set](docs/setup-done.png)
+
+If the scan misses your meter, hit **My meter is somewhere else** and point it at the folder. Admin rights are only requested when your meter sits in a protected folder like `Program Files`.
+
+### "Windows protected your PC"
+
+No code signing certificate yet (those cost money every year), so SmartScreen may throw a blue box the first time. Click **More info**, then **Run anyway**. Want to be extra safe? Drop the file on [VirusTotal](https://www.virustotal.com/gui/home/upload) first.
 
 ---
 
-## How to uninstall
+## Uninstall
 
-Close TeraToolbox, then run **uninstall.bat** (included in the zip). It restores your original files automatically and removes everything the patch added.
+Run `EnragedON-Setup.exe` again and hit **Uninstall**. Your original files come back from the backup it made during install.
 
 ---
 
 ## Is this safe?
 
-Yes. The source code is fully visible in this repo:
+Don't take my word for it, the whole thing is public:
 
-- [`src/RotationEnricher.cs`](src/RotationEnricher.cs) is the code that reads the skill hits and adds them to the upload
-- [`src/Patcher.cs`](src/Patcher.cs) is the tool that builds the patched DamageMeter.dll
+- [`src/RotationEnricher.cs`](src/RotationEnricher.cs) reads the skill hits and puts them in the upload
+- [`src/Patcher.cs`](src/Patcher.cs) builds the patched `DamageMeter.dll`
+- [`installer/`](installer/) is the full source of `EnragedON-Setup.exe`: what it looks for, what it writes, what it backs up
 
-The patch only adds one thing to the upload: the list of skill hits that ShinraMeter already tracks locally. Nothing else is changed and nothing is sent anywhere other than enragedon.com.
+What the patch does: adds the list of skill hits ShinraMeter already tracks on your PC to the upload it already sends. That's it. Nothing else changes and nothing goes anywhere except enragedon.com.
 
-The extra code is merged directly into `DamageMeter.dll` (a single self-contained file), so it works on any ShinraMeter build without depending on how that build loads assemblies. The installer also turns off auto-update in `module.json` so TeraToolbox does not overwrite the patched file.
+The code is merged straight into `DamageMeter.dll` as one self contained file, so it runs on any ShinraMeter build no matter how that build loads its assemblies. The installer also flips `disableAutoUpdate` in `module.json` so TeraToolbox can't overwrite the patched file, and rewrites the hash in `manifest.json` so the toolbox file check still passes.
 
----
+The installer touches no firewall rules, installs no service, adds nothing to startup and makes zero internet connections. Plain .NET 8 desktop app, not packed, not obfuscated.
 
-## What gets unlocked
+### "Export packets logs" gets turned off
 
-After playing a fight with the patch installed, the encounter page on enragedon.com will show two new tabs:
-
-**Skill Breakdown** shows each skill on its own row with every hit placed on a timeline. You can zoom in, drag to scroll, and click a skill to focus on it.
-
-**DPS Graph** shows how each player's DPS changed over the course of the fight. Switch between a running average and rolling 10s / 30s / 1m windows to spot burst phases, toggle players on and off, and overlay the boss HP line. Deaths are marked right on the curve.
-
-## Only sent to enragedon.com
-
-The hit-by-hit data is only attached to uploads going to **enragedon.com**. Any other upload targets you have configured keep getting the normal, lighter payload, so nothing changes for them.
+The installer unticks this ShinraMeter option. With it on, the meter reparses your stored packets when a boss dies, the protocol version flips under the running meter, and it silently stops counting party buffs and boss debuffs until you restart it. That happens with or without this patch. Leaving it off is the fix.
 
 ---
 
-## Notes
+## What you get
 
-- Works on Windows 10 and 11
-- The patched code is merged into `DamageMeter.dll` as a single self-contained file (no dependency on how that build loads assemblies)
-- The installer ships two prebuilt variants (one per known meter fork -- currently a stock TeraToolbox ShinraMeter and the Crazy-eSports-ClassicPlus client) and auto-detects which one matches your `DamageMeter.Sniffing.dll` before installing, so the same zip works for both without asking anything
-- If ShinraMeter updates to a new version, or a new private-server client ships its own fork, the patch needs to be rebuilt against that specific build with `build-patch.ps1 -MeterDir <that client's folder> -OutDir <somewhere>` and the resulting DLL added as a new variant
+- **Skill Breakdown**: every hit in order with crits, timestamps and a zoomable timeline
+- **DPS Graph**: the DPS curve of every player through the fight plus the boss HP drop
+
+Only **one person in the party** needs it. The timeline gets recorded for everyone in the run.
+
+---
+
+## Build it yourself
+
+```powershell
+# patched DamageMeter.dll, both variants, lands in release/
+powershell -ExecutionPolicy Bypass -File build-patch.ps1
+
+# the installer exe, lands in release-installer/
+dotnet publish installer -c Release -o release-installer
+```
+
+Needs .NET SDK 8.0 or newer. The DLLs in `release/` get embedded into the exe at build time.
+
+`install.ps1` and `uninstall.ps1` are still here for scripted installs. For everyone else the exe is the way.
