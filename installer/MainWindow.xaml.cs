@@ -497,8 +497,7 @@ public partial class MainWindow : Window
 
         var steps = PatchOps.InstallSteps.Select(t => new StepVM { Text = t }).ToList();
         steps[0].Status = StepStatus.Done; steps[0].Note = L.StepBackupNote;
-        steps[1].Status = StepStatus.Done;
-        steps[2].Status = StepStatus.Active; steps[2].Note = L.StepPacketsNote;
+        steps[1].Status = StepStatus.Active;
         StepList.ItemsSource = steps;
         ProgressTitle.Text = L.Installing;
         ProgressBrand.Content = BuildBrand(cp.KindName, string.Format(L.SubUpdateFmt, Payload.Version));

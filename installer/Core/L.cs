@@ -68,8 +68,6 @@ public static class L
     public static string StepBackup => T("Backing up your original files", "Fazendo backup dos seus arquivos originais");
     public static string StepBackupNote => T("kept for uninstall", "guardado para desinstalar");
     public static string StepPatch => T("Installing the Skill Breakdown patch", "Instalando o patch Skill Breakdown");
-    public static string StepPackets => T("Turning off “Export packets logs”", "Desligando “Export packets logs”");
-    public static string StepPacketsNote => T("fixes party buff tracking", "corrige os buffs da party");
     public static string StepAutoUpdate => T("Stopping auto-updates from undoing the patch", "Impedindo o auto-update de desfazer o patch");
     public static string StepVerify => T("Checking everything", "Conferindo tudo");
     public static string StepRestore => T("Restoring your original files", "Restaurando seus arquivos originais");

@@ -28,7 +28,7 @@ public static class PatchOps
     static readonly UTF8Encoding Utf8NoBom = new(false);
     static readonly JsonSerializerOptions JsonOut = new() { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
-    public static string[] InstallSteps => new[] { L.StepBackup, L.StepPatch, L.StepPackets, L.StepAutoUpdate, L.StepVerify };
+    public static string[] InstallSteps => new[] { L.StepBackup, L.StepPatch, L.StepAutoUpdate, L.StepVerify };
     public static string[] UninstallSteps => new[] { L.StepRestore, L.StepCleanup, L.StepVerify };
 
     public const int StepDelayMs = 320;
@@ -36,10 +36,11 @@ public static class PatchOps
     public static async Task InstallAsync(MeterInfo m, IProgress<StepReport> progress)
     {
         await Run(progress, 0, L.StepBackupNote, () => { Backup(m); return null; });
-        await Run(progress, 1, null, () => { WriteDll(m); return null; });
-        await Run(progress, 2, L.StepPacketsNote, () => TurnOffPacketExport(m.Folder) ? null : L.NoteNotNeeded);
-        await Run(progress, 3, null, () => KeepPatchOnUpdate(m.Folder) ? null : L.NoteNotNeeded);
-        await Run(progress, 4, null, () => { VerifyInstall(m); return null; });
+        // "Export packets logs" is turned off as part of installing, without a step of its
+        // own: the option's name means nothing to a player and only adds confusion.
+        await Run(progress, 1, null, () => { WriteDll(m); TurnOffPacketExport(m.Folder); return null; });
+        await Run(progress, 2, null, () => KeepPatchOnUpdate(m.Folder) ? null : L.NoteNotNeeded);
+        await Run(progress, 3, null, () => { VerifyInstall(m); return null; });
     }
 
     public static async Task UninstallAsync(MeterInfo m, IProgress<StepReport> progress)
