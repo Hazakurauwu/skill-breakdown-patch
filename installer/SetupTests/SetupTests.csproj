@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Console harness for the installer logic (Core/*.cs). No WPF, no UI: it copies
+       real meter folders into %TEMP% and runs install/uninstall against the copies,
+       so nothing on the machine is touched. See installer/MAINTAINING.md. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>EnragedON.Setup.Tests</RootNamespace>
+    <AssemblyName>SetupTests</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Core\*.cs" />
+    <Compile Include="..\GlobalUsings.cs" />
+    <!-- same payloads the real installer embeds -->
+    <EmbeddedResource Include="..\..\release\DamageMeter.dll" LogicalName="payload.toolbox.dll" />
+    <EmbeddedResource Include="..\..\release\DamageMeter.classicplus.dll" LogicalName="payload.classicplus.dll" />
+  </ItemGroup>
+
+</Project>
