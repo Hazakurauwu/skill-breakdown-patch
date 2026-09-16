@@ -4,3 +4,5 @@ bin/
 obj/
 publish*/
 release-installer/
+libs/
+work/
