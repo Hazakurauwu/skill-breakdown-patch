@@ -483,6 +483,14 @@ public partial class MainWindow : Window
         ShowScreen(ScreenHome); ShowMeters(new() { cp, tb }); ScreenHome.BeginAnimation(OpacityProperty, null); ScreenHome.Opacity = 1;
         Snap("1-home");
 
+        // Per variant shots. The site shows these per server: a Classic+ player must not see
+        // a TeraToolbox row in the screenshot and the other way around.
+        ShowMeters(new() { cp }); ScreenHome.Opacity = 1;
+        Snap("1-home-classicplus");
+        ShowMeters(new() { tb }); ScreenHome.Opacity = 1;
+        Snap("1-home-toolbox");
+        ShowMeters(new() { cp, tb });
+
         ProcList.ItemsSource = new[] { "TERA", "ShinraMeter" };
         ShowScreen(ScreenClose); ScreenClose.BeginAnimation(OpacityProperty, null); ScreenClose.Opacity = 1;
         Snap("2-close");
@@ -498,6 +506,12 @@ public partial class MainWindow : Window
         UpdateLayout();
         BarFill.Width = BarTrack.ActualWidth * .62;
         Snap("3-progress");
+        Snap("3-progress-classicplus");
+
+        ProgressBrand.Content = BuildBrand(tb.KindName, string.Format(L.SubInstallFmt, Payload.Version));
+        UpdateLayout();
+        BarFill.Width = BarTrack.ActualWidth * .62;
+        Snap("3-progress-toolbox");
 
         ShowResult(ResultKind.Installed, null); ScreenResult.BeginAnimation(OpacityProperty, null); ScreenResult.Opacity = 1;
         Snap("4-done");

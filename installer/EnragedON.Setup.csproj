@@ -32,6 +32,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- SetupTests is its own project living in a subfolder. Without these removes, this
+         project's default globs swallow its sources and its obj/ folder, and the build dies
+         with "Duplicate AssemblyTitleAttribute" and friends. -->
+    <Compile Remove="SetupTests\**" />
+    <Page Remove="SetupTests\**" />
+    <None Remove="SetupTests\**" />
+    <Resource Remove="SetupTests\**" />
+    <EmbeddedResource Remove="SetupTests\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Resource Include="Assets\Fonts\*.ttf" />
     <Resource Include="Assets\logo.png" />
     <Resource Include="Assets\app.ico" />
