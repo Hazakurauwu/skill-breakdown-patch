@@ -1,2 +1,6 @@
 *.bak
 *.prepatch.bak
+bin/
+obj/
+publish*/
+release-installer/
