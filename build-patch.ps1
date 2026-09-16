@@ -34,6 +34,7 @@ $patcherDll = Join-Path $patcher "bin\Release\net8.0\Patcher.dll"
 Write-Host "==> pass1: add field + InternalsVisibleTo" -ForegroundColor Cyan
 $p1 = Join-Path $work "DamageMeter.p1.dll"
 dotnet $patcherDll pass1 $inputDll $p1
+if ($LASTEXITCODE -ne 0) { throw "pass1 failed (exit $LASTEXITCODE)" }
 
 # The helper references Tera.Core.dll and Data.dll, and those genuinely DIFFER between
 # meter forks (stock TeraToolbox vs Crazy-eSports-ClassicPlus ship different builds --
@@ -57,9 +58,11 @@ $helperDll = Join-Path $helper "bin\Release\net8.0-windows\ShinraRotationPatch.d
 Write-Host "==> mergeinject: merge RotationEnricher into DamageMeter + inject call" -ForegroundColor Cyan
 $patched = Join-Path $work "DamageMeter.patched.dll"
 dotnet $patcherDll mergeinject $p1 $helperDll $patched
+if ($LASTEXITCODE -ne 0) { throw "mergeinject failed (exit $LASTEXITCODE)" }
 
 Write-Host "==> verify merged dll is self-contained" -ForegroundColor Cyan
 dotnet $patcherDll verify $patched
+if ($LASTEXITCODE -ne 0) { throw "verify FAILED (exit $LASTEXITCODE) -- not shipping this binary" }
 
 Write-Host "==> assembling $OutDir" -ForegroundColor Cyan
 Copy-Item "$MeterDir\*" $OutDir -Recurse -Force

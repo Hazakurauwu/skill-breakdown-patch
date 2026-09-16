@@ -41,6 +41,17 @@ static class Program
     {
         var mod = ModuleDefMD.Load(inDll);
 
+        // Refuse to patch a DLL that is already patched. Feeding the build an installed
+        // copy instead of the meter's pristine one merges RotationEnricher a second time,
+        // and the CLR then rejects the whole assembly at load with "Duplicate type". Fail
+        // here, loudly, instead of producing a binary that only breaks on the player's PC.
+        if (mod.Types.Any(t => t.FullName == "ShinraRotationPatch.RotationEnricher"))
+        {
+            Console.Error.WriteLine("REFUSING: " + inDll + " is ALREADY PATCHED (RotationEnricher present).");
+            Console.Error.WriteLine("Point -MeterDir at a pristine meter, or restore DamageMeter.dll.orig.bak first.");
+            return 4;
+        }
+
         var members = mod.Types.First(t => t.FullName == "DamageMeter.TeraDpsApi.Members");
         var jsonSkill = mod.Types.First(t => t.FullName == "DamageMeter.TeraDpsApi.JsonSkill");
         // reuse the exact List`1 reference (correct corlib scope) from an existing List<> field
@@ -387,7 +398,75 @@ static class Program
         cb.OptimizeMacros();
         Console.WriteLine("injected ApplyForServer into CheckAndSendFightData");
 
-        // There is deliberately no third injection. An earlier build injected a WarmUp()
+        // ---- 4) DIAGNOSTIC: inject OnPacket(message) at the start of
+        // PacketProcessingFactory.Process(ParsedMessage), the single dispatch point every parsed
+        // packet goes through. Only injected when the helper actually defines OnPacket, so a
+        // release helper without the trace simply skips this step.
+        var onPacketDef = rotType.Methods.FirstOrDefault(x => x.Name == "OnPacket" && x.Parameters.Count == 1);
+        // Read the helper's `const bool FullTrace`: a release build must not put a call into the
+        // hottest path of the meter just to return immediately.
+        var fullTraceField = rotType.Fields.FirstOrDefault(f => f.Name == "FullTrace" && f.HasConstant);
+        bool fullTraceOn = fullTraceField != null && fullTraceField.Constant.Value is bool ftv && ftv;
+        Console.WriteLine("FullTrace const = " + fullTraceOn + (fullTraceOn ? " (investigation build)" : " (release build, OnPacket not injected)"));
+        if (onPacketDef != null && fullTraceOn)
+        {
+            var ppf = mod.Types.First(t => t.FullName == "DamageMeter.PacketProcessingFactory");
+            var procM = ppf.Methods.First(x => x.Name == "Process" && x.Parameters.Count == 2
+                && x.Parameters[1].Type.TypeName == "ParsedMessage");
+            var pb = procM.Body;
+            var pfirst = pb.Instructions[0];
+            var ppre = new System.Collections.Generic.List<Instruction>
+            {
+                OpCodes.Ldarg_1.ToInstruction(),                 // message
+                OpCodes.Call.ToInstruction(onPacketDef),
+            };
+            for (int i = 0; i < ppre.Count; i++) pb.Instructions.Insert(i, ppre[i]);
+            foreach (var ins in pb.Instructions)
+            {
+                if (ppre.Contains(ins)) continue;
+                if (ins.Operand is Instruction t4 && t4 == pfirst) ins.Operand = ppre[0];
+                else if (ins.Operand is Instruction[] arr4)
+                    for (int k = 0; k < arr4.Length; k++) if (arr4[k] == pfirst) arr4[k] = ppre[0];
+            }
+            foreach (var eh in pb.ExceptionHandlers)
+                if (eh.TryStart == pfirst) eh.TryStart = ppre[0];
+            pb.OptimizeBranches();
+            pb.OptimizeMacros();
+            Console.WriteLine("injected OnPacket into PacketProcessingFactory.Process (diagnostic trace)");
+        }
+
+        // ---- 5) DISABLE DamageMeter.PacketsExporter.Export (the "Export packets logs" option).
+        //
+        // ROOT CAUSE of the 2026-09-16 "party buffs and boss debuffs vanish from the 2nd boss
+        // on, until the meter restarts" report, confirmed with a full-session trace and a clean
+        // A/B (option on: corrupted 138ms after the export ran; option off: never).
+        //
+        // With packets_collect on, the meter keeps a copy of every packet. When a boss dies,
+        // the exporter runs on the upload thread and re-parses every stored packet through
+        // PacketProcessor.Instance.MessageFactory -- the LIVE factory the packet thread is using.
+        // One of the stored packets is C_LOGIN_ARBITER, whose parser WRITES
+        // `reader.Factory.ReleaseVersion = Version`. Re-parsing it swaps the protocol version
+        // under the running meter. SAbnormalityBegin decides whether to skip 4 bytes based on
+        // ReleaseVersion, so from then on every buff begin is read 4 bytes off (the ability id
+        // comes out as a duration like 8000/2000, the target as garbage), EntityTracker cannot
+        // find the target, and Abnormality.RegisterBuff silently drops it. Begin packets only:
+        // end/refresh parse fine, which is why existing buffs look frozen rather than gone.
+        // Present in both the stock TeraToolbox meter and the Crazy-eSports-ClassicPlus fork.
+        //
+        // The feature only uploads packet captures to a third party (neowutran.ovh), and in
+        // every log collected during the investigation that upload failed anyway (timeout / SSL).
+        // Disabling it costs players nothing and makes the patched meter immune regardless of
+        // what their settings say. The installer also turns the option off in window.xml.
+        var pex = mod.Types.FirstOrDefault(t => t.FullName == "DamageMeter.PacketsExporter");
+        var exportM = pex?.Methods.FirstOrDefault(x => x.Name == "Export" && x.Parameters.Count == 3);
+        if (exportM == null || !exportM.HasBody) { Console.Error.WriteLine("PacketsExporter.Export not found"); return 3; }
+        exportM.Body.Instructions.Clear();
+        exportM.Body.ExceptionHandlers.Clear();
+        exportM.Body.Variables.Clear();
+        exportM.Body.Instructions.Add(OpCodes.Ret.ToInstruction());
+        Console.WriteLine("disabled PacketsExporter.Export (packet log export re-parse corrupted live abnormality parsing)");
+
+        // There is deliberately no WarmUp injection. An earlier build injected a WarmUp()
         // call into PacketProcessor's constructor to pre-JIT this patch's methods, on the
         // theory that first-call JIT cost during the first boss kill was corrupting
         // abnormality tracking. That theory is dead: the corruption was a PlayerTracker
@@ -497,6 +576,17 @@ static class Program
         Console.WriteLine((hasExtRef ? "FAIL" : "OK  ") + " : external ShinraRotationPatch assembly ref " + (hasExtRef ? "STILL PRESENT" : "absent"));
         if (hasExtRef) ok = false;
 
+        // 1b) the type must appear EXACTLY once. Merging into an already-patched DLL (easy
+        // to do by accident when the -MeterDir still holds a previous install) produces a
+        // second copy, and the CLR then refuses the whole assembly at load time with
+        // "BadImageFormatException: Duplicate type". Every other check below happily passes
+        // on such a build because they all use FirstOrDefault, so this has to be its own
+        // check -- a duplicated DLL shipped to players would brick their meter outright.
+        int rotCount = mod.Types.Count(t => t.FullName == "ShinraRotationPatch.RotationEnricher");
+        Console.WriteLine((rotCount == 1 ? "OK  " : "FAIL") + " : RotationEnricher appears exactly once (" + rotCount + ")"
+            + (rotCount > 1 ? "  -- BUILT FROM AN ALREADY-PATCHED DLL, UNUSABLE" : ""));
+        if (rotCount != 1) ok = false;
+
         // 2) RotationEnricher is an internal TypeDef
         var rot = mod.Types.FirstOrDefault(t => t.FullName == "ShinraRotationPatch.RotationEnricher");
         Console.WriteLine((rot != null ? "OK  " : "FAIL") + " : RotationEnricher is a TypeDef inside this module " + (rot != null ? "yes" : "NO"));
@@ -578,6 +668,32 @@ static class Program
         }
         Console.WriteLine((applyClean ? "OK  " : "FAIL") + " : ApplyForServer touches no packet-thread state " + (applyClean ? "yes" : "NO -- THREAD CONTRACT VIOLATED"));
         if (!applyClean) ok = false;
+
+        // 4d) diagnostic trace wiring must match the helper's FullTrace constant:
+        //     investigation build -> Process calls OnPacket; release build -> it must NOT.
+        {
+            var ftField = rot?.Fields.FirstOrDefault(f => f.Name == "FullTrace" && f.HasConstant);
+            bool ftOn = ftField != null && ftField.Constant.Value is bool ftv2 && ftv2;
+            var ppfT = mod.Types.First(t => t.FullName == "DamageMeter.PacketProcessingFactory");
+            var procV = ppfT.Methods.First(x => x.Name == "Process" && x.Parameters.Count == 2);
+            var opCall = procV.Body.Instructions.FirstOrDefault(i => i.OpCode == OpCodes.Call
+                && i.Operand is IMethod opIm && opIm.Name == "OnPacket");
+            bool opOk = ftOn ? (opCall != null && opCall.Operand is MethodDef) : (opCall == null);
+            Console.WriteLine((opOk ? "OK  " : "FAIL") + " : trace wiring matches FullTrace=" + ftOn
+                + (ftOn ? " (Process calls OnPacket)" : " (Process untouched)"));
+            if (!opOk) ok = false;
+        }
+
+        // 4e) the packet log exporter must be neutralized (see mergeinject step 5)
+        {
+            var pexT = mod.Types.FirstOrDefault(t => t.FullName == "DamageMeter.PacketsExporter");
+            var expV = pexT?.Methods.FirstOrDefault(x => x.Name == "Export" && x.Parameters.Count == 3);
+            bool expOk = expV != null && expV.HasBody && expV.Body.Instructions.Count == 1
+                && expV.Body.Instructions[0].OpCode == OpCodes.Ret;
+            Console.WriteLine((expOk ? "OK  " : "FAIL") + " : PacketsExporter.Export disabled (body is a single ret) "
+                + (expOk ? "yes" : "NO -- players with 'Export packets logs' on would lose party buff tracking"));
+            if (!expOk) ok = false;
+        }
 
         // 5) module-wide scan for ANY ref still scoped to the helper module
         Console.WriteLine();

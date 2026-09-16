@@ -244,6 +244,30 @@ function Install-ToShinra {
         return $false
     }
 
+    # Turn OFF "Export packets logs" (window.xml <packets_collect>). That option re-parses
+    # the session's stored packets through the meter's live parser when a boss dies, which
+    # swaps the protocol version under the running meter and makes it silently drop every
+    # new buff/debuff until restart. The patched DLL already neutralizes the exporter; this
+    # also fixes the setting itself so an unpatched meter (e.g. after uninstall) is safe too.
+    # Safe to edit here: the client was required to be closed above, so the meter cannot
+    # overwrite window.xml on exit.
+    foreach ($cfgName in @("window.xml", "window_backup.xml")) {
+        $cfg = Join-Path $shinra ("resources\config\" + $cfgName)
+        if (-not (Test-Path $cfg)) { continue }
+        try {
+            $raw = [System.IO.File]::ReadAllText($cfg)
+            if ($raw -match '<packets_collect>\s*true\s*</packets_collect>') {
+                $cfgBak = "$cfg.prepatch.bak"
+                if (-not (Test-Path $cfgBak)) { Copy-Item $cfg $cfgBak -Force }
+                $raw = [regex]::Replace($raw, '<packets_collect>\s*true\s*</packets_collect>', '<packets_collect>false</packets_collect>')
+                [System.IO.File]::WriteAllText($cfg, $raw, (New-Object System.Text.UTF8Encoding($false)))
+                Write-Host "    turned off 'Export packets logs' in $cfgName (it breaks party buff tracking)"
+            }
+        } catch {
+            Write-Host "    could not update $cfgName ($($_.Exception.Message)) - untick 'Export packets logs' in the meter settings manually" -ForegroundColor Yellow
+        }
+    }
+
     # Turn OFF auto-update in module.json (so the toolbox won't overwrite the patch)
     $modPath = Join-Path $shinra "module.json"
     if (Test-Path $modPath) {
