@@ -34,6 +34,7 @@ public static class L
     public static string ChooseFolder => T("Choose folder", "Escolher pasta");
     public static string AddManual => T("+ My meter is somewhere else", "+ Meu meter está em outro lugar");
     public static string PickFolderTitle => T("Select your ShinraMeter or TeraToolbox folder", "Selecione a pasta do ShinraMeter ou do TeraToolbox");
+    public static string PickFolderPlaceholder => T("Select this folder", "Selecionar esta pasta");
     public static string NotFoundInFolder => T("No ShinraMeter found in that folder.", "Nenhum ShinraMeter encontrado nessa pasta.");
 
     public static string KindClassicPlus => "TERA Europe Classic+";

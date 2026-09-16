@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net7.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -23,7 +23,12 @@
     <NeutralLanguage>en</NeutralLanguage>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
 
-    <!-- One framework-dependent exe (.NET 8 Desktop Runtime, which ShinraMeter already needs). -->
+    <!-- One framework-dependent exe, no runtime bundled. -->
+    <!-- Targets .NET 7 on purpose: the ShinraMeter that ships with TeraToolbox runs on the
+         .NET 7 Desktop runtime, the Classic+ one on 8. Building for 7 plus LatestMajor roll
+         forward means the exe starts on whichever of those (or newer) the player has, instead
+         of Windows asking them to download a runtime before the installer even opens. -->
+    <RollForward>LatestMajor</RollForward>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>

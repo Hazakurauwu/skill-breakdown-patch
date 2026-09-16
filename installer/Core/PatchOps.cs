@@ -17,7 +17,10 @@ public sealed class StepReport
 }
 
 /// <summary>A failure with a message that is safe to show as-is.</summary>
-public sealed class FriendlyException(string message) : Exception(message);
+public sealed class FriendlyException : Exception
+{
+    public FriendlyException(string message) : base(message) { }
+}
 
 /// <summary>Install / uninstall of the patch in one meter folder. Mirrors install.ps1 / uninstall.ps1.</summary>
 public static class PatchOps

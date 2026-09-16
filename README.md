@@ -62,7 +62,7 @@ What the patch does: adds the list of skill hits ShinraMeter already tracks on y
 
 The code is merged straight into `DamageMeter.dll` as one self contained file, so it runs on any ShinraMeter build no matter how that build loads its assemblies. The installer also flips `disableAutoUpdate` in `module.json` so TeraToolbox can't overwrite the patched file, and rewrites the hash in `manifest.json` so the toolbox file check still passes.
 
-The installer touches no firewall rules, installs no service, adds nothing to startup and makes zero internet connections. Plain .NET 8 desktop app, not packed, not obfuscated.
+The installer touches no firewall rules, installs no service, adds nothing to startup and makes zero internet connections. Plain .NET desktop app, not packed, not obfuscated. It runs on the same .NET your meter already uses, so there is nothing extra to install.
 
 ### "Export packets logs" gets turned off
 

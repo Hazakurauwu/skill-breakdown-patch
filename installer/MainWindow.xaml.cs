@@ -97,9 +97,23 @@ public partial class MainWindow : Window
 
     void OnPickFolder(object sender, RoutedEventArgs e)
     {
-        var dlg = new Microsoft.Win32.OpenFolderDialog { Title = L.PickFolderTitle, Multiselect = false };
+        // OpenFolderDialog is .NET 8 only, and this app targets 7 so it starts on the runtime
+        // the meter already needs. This is the long standing workaround: the Explorer style
+        // open dialog in "pick a folder" mode, which also has a real, pasteable path box.
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = L.PickFolderTitle,
+            ValidateNames = false,
+            CheckFileExists = false,
+            CheckPathExists = true,
+            FileName = L.PickFolderPlaceholder,
+            Filter = "Folders|" + (char)10,   // a filter with no real pattern hides every file
+        };
         if (dlg.ShowDialog(this) != true) return;
-        var hits = MeterScanner.ScanFolder(dlg.FolderName);
+        // Pasting a full path and pressing Enter can leave that exact path in FileName.
+        string picked = Directory.Exists(dlg.FileName) ? dlg.FileName : (Path.GetDirectoryName(dlg.FileName) ?? "");
+        if (picked.Length == 0) { ShowPickError(); return; }
+        var hits = MeterScanner.ScanFolder(picked);
         if (hits.Count == 0)
         {
             ShowPickError();
