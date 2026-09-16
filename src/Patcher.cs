@@ -41,46 +41,66 @@ static class Program
     {
         var mod = ModuleDefMD.Load(inDll);
 
-        // --- add public field: List<JsonSkill> dealtSkillLog to Members ---
         var members = mod.Types.First(t => t.FullName == "DamageMeter.TeraDpsApi.Members");
+        var jsonSkill = mod.Types.First(t => t.FullName == "DamageMeter.TeraDpsApi.JsonSkill");
+        // reuse the exact List`1 reference (correct corlib scope) from an existing List<> field
+        var sampleList = members.Fields
+            .Select(f => f.FieldSig.Type as GenericInstSig)
+            .First(g => g != null && g.GenericType.TypeName == "List`1");
+
+        // --- add public field: List<JsonSkill> dealtSkillLog to Members ---
+        // The field that actually gets serialized into the upload payload.
         if (members.Fields.Any(f => f.Name == "dealtSkillLog"))
         {
             Console.WriteLine("dealtSkillLog already present, skipping field add");
         }
         else
         {
-            var jsonSkill = mod.Types.First(t => t.FullName == "DamageMeter.TeraDpsApi.JsonSkill");
-            // reuse the exact List`1 reference (correct corlib scope) from an existing List<> field
-            var sampleList = members.Fields
-                .Select(f => f.FieldSig.Type as GenericInstSig)
-                .First(g => g != null && g.GenericType.TypeName == "List`1");
             var listGen = new GenericInstSig((ClassOrValueTypeSig)sampleList.GenericType, jsonSkill.ToTypeSig());
-            var field = new FieldDefUser("dealtSkillLog",
-                new FieldSig(listGen),
-                FieldAttributes.Public);
-            members.Fields.Add(field);
+            members.Fields.Add(new FieldDefUser("dealtSkillLog",
+                new FieldSig(listGen), FieldAttributes.Public));
             Console.WriteLine("added Members.dealtSkillLog (List`1 from " + sampleList.GenericType.TypeName + ")");
         }
 
-        // --- add public fields: string dir, string tgtName to JsonSkill ---
-        // dir   = raw HitDirection.ToString() ("Back"/"Front"/"Side"/"Dot"/etc), so the
-        //         backend maps names explicitly instead of trusting an enum ordinal that
-        //         could shift between game/meter versions.
-        // tgtName = resolved display name of the hit's target (NpcEntity.Info.Name for a
-        //         monster, UserEntity.Name for PvP) -- mirrors exactly what SkillLog.xaml.cs
-        //         already shows in the live SkillDealt tab, just serialized this time.
+        // --- add INTERNAL field: List<JsonSkill> rotBackup to Members ---
+        // Where RotationEnricher.Enrich parks the built timeline on the packet thread, so
+        // ApplyForServer can hand it to enragedon (and only enragedon) from the upload
+        // thread without recomputing anything. Recomputing there is precisely what caused
+        // the 2026-09 PlayerTracker data race -- see the thread contract at the top of
+        // src/RotationEnricher.cs before touching this.
+        // INTERNAL on purpose: Json.NET's default contract resolver takes public fields and
+        // properties only, so this one never reaches any upload payload.
+        if (members.Fields.Any(f => f.Name == "rotBackup"))
         {
-            var jsonSkillFields = mod.Types.First(t => t.FullName == "DamageMeter.TeraDpsApi.JsonSkill");
-            if (jsonSkillFields.Fields.Any(f => f.Name == "dir"))
-            {
-                Console.WriteLine("JsonSkill.dir already present, skipping field add");
-            }
-            else
-            {
-                jsonSkillFields.Fields.Add(new FieldDefUser("dir", new FieldSig(mod.CorLibTypes.String), FieldAttributes.Public));
-                jsonSkillFields.Fields.Add(new FieldDefUser("tgtName", new FieldSig(mod.CorLibTypes.String), FieldAttributes.Public));
-                Console.WriteLine("added JsonSkill.dir + JsonSkill.tgtName (String)");
-            }
+            Console.WriteLine("rotBackup already present, skipping field add");
+        }
+        else
+        {
+            var listGen2 = new GenericInstSig((ClassOrValueTypeSig)sampleList.GenericType, jsonSkill.ToTypeSig());
+            members.Fields.Add(new FieldDefUser("rotBackup",
+                new FieldSig(listGen2), FieldAttributes.Assembly));
+            Console.WriteLine("added Members.rotBackup (internal, List`1)");
+        }
+
+        // --- add public fields: string dir, string tgtName to JsonSkill ---
+        // dir     = HitDirection.ToString() ("Back"/"Front"/"Side"/...), so the backend maps
+        //           names explicitly instead of trusting an enum ordinal that could shift
+        //           between game/meter versions.
+        // tgtName = resolved display name of the hit's target (NpcEntity.Info.Name for a
+        //           monster, UserEntity.Name for PvP), mirroring exactly what SkillLog.xaml.cs
+        //           already shows in the live SkillDealt tab.
+        // Both are pure reads of readonly auto-properties on Database.Structures.Skill and are
+        // computed on the packet thread only. They were suspected during the 2026-09
+        // investigation and cleared: the real cause was the cross-thread PlayerTracker read.
+        if (jsonSkill.Fields.Any(f => f.Name == "dir"))
+        {
+            Console.WriteLine("JsonSkill.dir already present, skipping field add");
+        }
+        else
+        {
+            jsonSkill.Fields.Add(new FieldDefUser("dir", new FieldSig(mod.CorLibTypes.String), FieldAttributes.Public));
+            jsonSkill.Fields.Add(new FieldDefUser("tgtName", new FieldSig(mod.CorLibTypes.String), FieldAttributes.Public));
+            Console.WriteLine("added JsonSkill.dir + JsonSkill.tgtName (String)");
         }
 
         // --- add [assembly: InternalsVisibleTo("ShinraRotationPatch")] ---
@@ -265,7 +285,20 @@ static class Program
 
         var enrichDef = rotType.Methods.First(x => x.Name == "Enrich" && x.Parameters.Count == 1);
 
-        // ---- 2) INJECT the call into AutomatedExport (same point as pass2) ----
+        // ---- 2) INJECT a call to Enrich(stats) into AutomatedExport(NpcEntity,
+        // AbnormalityStorage), right after the stats-not-null check.
+        //
+        // This is the packet-processing thread, and it is where ALL of this patch's real
+        // work belongs. Read the thread contract at the top of src/RotationEnricher.cs
+        // before moving this call anywhere else: the 2026-09 corruption bug was caused by
+        // doing part of this work on the upload thread instead, where reading
+        // PlayerTracker's unsynchronized Dictionary raced the packet thread's writes to it
+        // and permanently split the Player identity that AbnormalityStorage is keyed by.
+        //
+        // Running it here is not a risk: stock JsonExporter.JsonSave is called on this very
+        // thread a few instructions later and does strictly more of the same work (the same
+        // member loop, the same PlayerTracker lookup, the same JsonSkill construction, then
+        // again for received hits and abnormals).
         var de = mod.Types.First(t => t.FullName == "DamageMeter.DataExporter");
         var m = de.Methods.First(x => x.Name == "AutomatedExport"
             && x.Parameters.Count == 2
@@ -353,6 +386,14 @@ static class Program
         cb.OptimizeBranches();
         cb.OptimizeMacros();
         Console.WriteLine("injected ApplyForServer into CheckAndSendFightData");
+
+        // There is deliberately no third injection. An earlier build injected a WarmUp()
+        // call into PacketProcessor's constructor to pre-JIT this patch's methods, on the
+        // theory that first-call JIT cost during the first boss kill was corrupting
+        // abnormality tracking. That theory is dead: the corruption was a PlayerTracker
+        // data race (see src/RotationEnricher.cs), and stock JsonExporter.JsonSave already
+        // JITs an equivalent amount of code on that same path. Injecting into a constructor
+        // for no benefit is pure added risk, so it is gone.
 
         mod.Write(outDll);
         Console.WriteLine("mergeinject done: " + outDll);
@@ -465,23 +506,78 @@ static class Program
             var enr = rot.Methods.FirstOrDefault(m => m.Name == "Enrich");
             Console.WriteLine((enr != null ? "OK  " : "FAIL") + " : Enrich method present " + (enr != null ? "yes" : "NO"));
             if (enr == null) ok = false;
+            var apply = rot.Methods.FirstOrDefault(m => m.Name == "ApplyForServer");
+            Console.WriteLine((apply != null ? "OK  " : "FAIL") + " : ApplyForServer method present " + (apply != null ? "yes" : "NO"));
+            if (apply == null) ok = false;
         }
 
-        // 3) Members.dealtSkillLog field present
+        // 3) fields added by pass1 all present
         var members = mod.Types.FirstOrDefault(t => t.FullName == "DamageMeter.TeraDpsApi.Members");
-        bool hasField = members != null && members.Fields.Any(f => f.Name == "dealtSkillLog");
+        var jsonSk = mod.Types.FirstOrDefault(t => t.FullName == "DamageMeter.TeraDpsApi.JsonSkill");
+        var dslField = members?.Fields.FirstOrDefault(f => f.Name == "dealtSkillLog");
+        var bakField = members?.Fields.FirstOrDefault(f => f.Name == "rotBackup");
+        bool hasField = dslField != null;
         Console.WriteLine((hasField ? "OK  " : "FAIL") + " : Members.dealtSkillLog field present " + (hasField ? "yes" : "NO"));
         if (!hasField) ok = false;
+        bool hasBak = bakField != null;
+        Console.WriteLine((hasBak ? "OK  " : "FAIL") + " : Members.rotBackup field present " + (hasBak ? "yes" : "NO"));
+        if (!hasBak) ok = false;
+        // rotBackup MUST stay non-public, or Json.NET's default resolver would serialize it
+        // and every upload target would get the heavy payload twice over.
+        bool bakIsInternal = bakField != null && !bakField.IsPublic;
+        Console.WriteLine((bakIsInternal ? "OK  " : "FAIL") + " : Members.rotBackup is non-public (never serialized) " + (bakIsInternal ? "yes" : "NO -- WOULD LEAK INTO PAYLOAD"));
+        if (!bakIsInternal) ok = false;
+        bool hasDir = jsonSk != null && jsonSk.Fields.Any(f => f.Name == "dir") && jsonSk.Fields.Any(f => f.Name == "tgtName");
+        Console.WriteLine((hasDir ? "OK  " : "FAIL") + " : JsonSkill.dir + tgtName fields present " + (hasDir ? "yes" : "NO"));
+        if (!hasDir) ok = false;
 
-        // 4) the injected call resolves to the internal MethodDef (not a MemberRef to external)
+        // 4a) AutomatedExport MUST call Enrich, and it must resolve to the INTERNAL MethodDef
+        // (not a MemberRef into the helper module, which would fail to load at JIT time).
+        // This is the packet-processing thread: the only thread allowed to touch PlayerTracker.
         var de = mod.Types.First(t => t.FullName == "DamageMeter.DataExporter");
         var ae = de.Methods.First(x => x.Name == "AutomatedExport" && x.Parameters.Count == 2
             && x.Parameters[0].Type.FullName == "Tera.Game.NpcEntity");
         var enrichCall = ae.Body.Instructions.FirstOrDefault(i => i.OpCode == OpCodes.Call
-            && i.Operand is IMethod im && im.Name == "Enrich");
-        bool internalCall = enrichCall != null && enrichCall.Operand is MethodDef;
-        Console.WriteLine((internalCall ? "OK  " : "FAIL") + " : injected Enrich call targets internal MethodDef " + (internalCall ? "yes" : "NO (still a MemberRef)"));
-        if (!internalCall) ok = false;
+            && i.Operand is IMethod aeIm && aeIm.Name == "Enrich");
+        bool enrichIsInternal = enrichCall != null && enrichCall.Operand is MethodDef;
+        Console.WriteLine((enrichIsInternal ? "OK  " : "FAIL") + " : AutomatedExport calls internal Enrich " + (enrichIsInternal ? "yes" : "NO"));
+        if (!enrichIsInternal) ok = false;
+
+        // 4b) CheckAndSendFightData must open with a call to (the internal) ApplyForServer,
+        // which hands the prepared log to enragedon and strips it for every other target.
+        var dpsT = mod.Types.First(t => t.FullName == "DamageMeter.TeraDpsApi.DpsServer");
+        var csfdM = dpsT.Methods.First(x => x.Name == "CheckAndSendFightData" && x.Parameters.Count == 3
+            && x.Parameters[1].Type.FullName == "DamageMeter.TeraDpsApi.EncounterBase");
+        var applyCall = csfdM.Body.Instructions.FirstOrDefault(i => i.OpCode == OpCodes.Call
+            && i.Operand is IMethod csIm && csIm.Name == "ApplyForServer");
+        bool applyIsInternal = applyCall != null && applyCall.Operand is MethodDef;
+        Console.WriteLine((applyIsInternal ? "OK  " : "FAIL") + " : CheckAndSendFightData calls internal ApplyForServer " + (applyIsInternal ? "yes" : "NO"));
+        if (!applyIsInternal) ok = false;
+
+        // 4c) THE REGRESSION GUARD. ApplyForServer runs on the upload thread, so its IL must
+        // not reference anything the packet thread owns and mutates. Reading PlayerTracker's
+        // unsynchronized Dictionary from here is exactly the bug that made the support's
+        // buff/debuff tracking vanish from the 2nd boss onward in 2026-09. If a future edit
+        // reintroduces it, this check fails the build instead of shipping it to players.
+        string[] forbidden = { "PacketProcessor", "PlayerTracker", "AbnormalityStorage",
+                               "AbnormalityTracker", "EntityTracker", "Skills", "Database" };
+        var applyDefV = rot?.Methods.FirstOrDefault(m => m.Name == "ApplyForServer");
+        bool applyClean = true;
+        if (applyDefV?.Body != null)
+        {
+            foreach (var ins in applyDefV.Body.Instructions)
+            {
+                string opnd = ins.Operand?.ToString() ?? "";
+                foreach (var bad in forbidden)
+                {
+                    if (opnd.IndexOf(bad, StringComparison.Ordinal) < 0) continue;
+                    Console.WriteLine("       ApplyForServer touches " + bad + " @ " + ins.OpCode + " : " + opnd);
+                    applyClean = false;
+                }
+            }
+        }
+        Console.WriteLine((applyClean ? "OK  " : "FAIL") + " : ApplyForServer touches no packet-thread state " + (applyClean ? "yes" : "NO -- THREAD CONTRACT VIOLATED"));
+        if (!applyClean) ok = false;
 
         // 5) module-wide scan for ANY ref still scoped to the helper module
         Console.WriteLine();

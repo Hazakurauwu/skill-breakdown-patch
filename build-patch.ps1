@@ -35,9 +35,24 @@ Write-Host "==> pass1: add field + InternalsVisibleTo" -ForegroundColor Cyan
 $p1 = Join-Path $work "DamageMeter.p1.dll"
 dotnet $patcherDll pass1 $inputDll $p1
 
+# The helper references Tera.Core.dll and Data.dll, and those genuinely DIFFER between
+# meter forks (stock TeraToolbox vs Crazy-eSports-ClassicPlus ship different builds --
+# verified by hash). Always compile the helper against the reference assemblies of the
+# very meter we are patching, so a fork can never end up with IL bound to another fork's
+# type/member layout. Same reasoning as building the patched DamageMeter.dll from that
+# fork's own stock DLL rather than from one static prebuilt binary.
+$libs = Join-Path $root "libs"
+New-Item -ItemType Directory -Force -Path $libs | Out-Null
+foreach ($refDll in @("Tera.Core.dll", "Data.dll")) {
+    $src = Join-Path $MeterDir $refDll
+    if (-not (Test-Path $src)) { throw "$refDll not found in $MeterDir" }
+    Copy-Item $src (Join-Path $libs $refDll) -Force
+}
+Write-Host ("    reference libs taken from " + $MeterDir)
+
 Write-Host "==> building helper against patched reference" -ForegroundColor Cyan
 dotnet build $helper -c Release -v quiet | Out-Null
-$helperDll = Join-Path $helper "bin\Release\ShinraRotationPatch.dll"
+$helperDll = Join-Path $helper "bin\Release\net8.0-windows\ShinraRotationPatch.dll"
 
 Write-Host "==> mergeinject: merge RotationEnricher into DamageMeter + inject call" -ForegroundColor Cyan
 $patched = Join-Path $work "DamageMeter.patched.dll"
@@ -53,19 +68,28 @@ Copy-Item $inputDll (Join-Path $OutDir "DamageMeter.dll.orig.bak") -Force
 Copy-Item $patched   (Join-Path $OutDir "DamageMeter.dll") -Force
 # no separate helper DLL anymore -- it is merged into DamageMeter.dll
 
-Write-Host "==> regenerating manifest.json (SHA-256)" -ForegroundColor Cyan
-$manifestPath = Join-Path $OutDir "manifest.json"
-$man = Get-Content $manifestPath -Raw | ConvertFrom-Json
 function FileHash256($p) { (Get-FileHash -Algorithm SHA256 -Path $p).Hash.ToLower() }
-
 $dmHash = FileHash256 (Join-Path $OutDir "DamageMeter.dll")
-$man.files.'DamageMeter.dll' = $dmHash
-# helper is merged into DamageMeter.dll now -- no separate entry needed
 
-# re-emit with tabs to match the original manifest style
-$json = $man | ConvertTo-Json -Depth 10
-$json = ($json -split "`n" | ForEach-Object { ($_ -replace '    ', "`t") }) -join "`n"
-Set-Content -Path $manifestPath -Value $json -Encoding utf8
+# Only the classic TeraToolbox mod layout ships a manifest.json with a
+# per-file SHA-256 map that the toolbox checks on load. The Crazy-eSports-
+# ClassicPlus launcher's "external mod" layout (registry.json at the
+# launcher level, .rsa signature files instead) has no such file -- nothing
+# to regenerate there, and trying to would just fail on a missing path.
+$manifestPath = Join-Path $OutDir "manifest.json"
+if (Test-Path $manifestPath) {
+    Write-Host "==> regenerating manifest.json (SHA-256)" -ForegroundColor Cyan
+    $man = Get-Content $manifestPath -Raw | ConvertFrom-Json
+    $man.files.'DamageMeter.dll' = $dmHash
+    # helper is merged into DamageMeter.dll now -- no separate entry needed
+
+    # re-emit with tabs to match the original manifest style
+    $json = $man | ConvertTo-Json -Depth 10
+    $json = ($json -split "`n" | ForEach-Object { ($_ -replace '    ', "`t") }) -join "`n"
+    Set-Content -Path $manifestPath -Value $json -Encoding utf8
+} else {
+    Write-Host "==> no manifest.json in this meter layout -- skipping hash regeneration" -ForegroundColor Yellow
+}
 
 Write-Host ""
 Write-Host "DONE." -ForegroundColor Green
