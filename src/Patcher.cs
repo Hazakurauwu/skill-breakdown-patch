@@ -19,7 +19,7 @@ static class Program
             case "pass1": return Pass1(args[1], args[2]);
             case "pass2": return Pass2(args[1], args[2], args[3]);
             case "mergeinject": return MergeInject(args[1], args[2], args[3]);
-            case "verify": return Verify(args[1]);
+            case "verify": return Verify(args[1], args.Length > 2 ? int.Parse(args[2]) : 0);
             case "dump": return Dump(args[1]);
             case "dumpm": return DumpMethod(args[1], args[2], args[3]);
             case "sn":
@@ -566,7 +566,8 @@ static class Program
             : new Instruction(ins.OpCode, ins.Operand);
     }
 
-    static int Verify(string inDll)
+    // meterMajor = the .NET major the target meter runs on (from its runtimeconfig); 0 skips check 0.
+    static int Verify(string inDll, int meterMajor)
     {
         var mod = ModuleDefMD.Load(inDll);
         bool ok = true;
@@ -725,10 +726,32 @@ static class Program
             }
         }
 
+        // 0) framework references must not be newer than the runtime the meter runs on. The
+        // helper's IL is merged with its own framework refs, and the runtime only resolves them
+        // when that code is first JIT-compiled -- at the end of the first fight -- so a net8 ref
+        // inside a net7 meter opens fine and then dies with FileNotFoundException
+        // 'System.Runtime, Version=8.0.0.0' when the boss dies. v1.6 shipped exactly that.
+        if (meterMajor > 0)
+        {
+            var tooNew = mod.GetAssemblyRefs().Where(a => IsFrameworkRef(a.Name) && a.Version.Major > meterMajor).ToList();
+            Console.WriteLine((tooNew.Count == 0 ? "OK  " : "FAIL") + " : framework refs fit .NET " + meterMajor
+                + (tooNew.Count == 0 ? "" : "  -- TOO NEW: " + string.Join(", ", tooNew.Select(a => a.Name + " " + a.Version))));
+            if (tooNew.Count > 0) ok = false;
+        }
+        else Console.WriteLine("SKIP : framework ref check (no meter .NET version given)");
+
         Console.WriteLine();
         Console.WriteLine(ok ? "ALL CHECKS PASSED" : "SOME CHECKS FAILED");
         return ok ? 0 : 1;
     }
+
+    // Assemblies that come from the shared .NET runtime (versioned with it), as opposed to
+    // NuGet packages that ship next to the meter (System.Data.SQLite 1.0.x and the like).
+    static bool IsFrameworkRef(string name) =>
+        name == "System" || name == "netstandard" || name == "mscorlib" || name == "WindowsBase" ||
+        name == "PresentationCore" || name == "PresentationFramework" ||
+        (name.StartsWith("System.") && !name.StartsWith("System.Data.SQLite")) ||
+        name.StartsWith("Microsoft.Win32.") || name.StartsWith("Microsoft.VisualBasic") || name == "Microsoft.CSharp";
 
     static int DumpMethod(string inDll, string typeName, string methodName)
     {

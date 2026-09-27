@@ -13,8 +13,8 @@
 
     <!-- Version info shown in the file's Properties > Details tab. A plain, honest
          identity (no packer, no obfuscation) is part of what keeps antivirus calm. -->
-    <Version>1.6.0</Version>
-    <FileVersion>1.6.0.0</FileVersion>
+    <Version>1.7.0</Version>
+    <FileVersion>1.7.0.0</FileVersion>
     <AssemblyTitle>EnragedON Setup</AssemblyTitle>
     <Product>EnragedON Skill Breakdown Patch</Product>
     <Company>EnragedON</Company>
@@ -41,10 +41,15 @@
          project's default globs swallow its sources and its obj/ folder, and the build dies
          with "Duplicate AssemblyTitleAttribute" and friends. -->
     <Compile Remove="SetupTests\**" />
+    <Compile Remove="JitCheck\**" />
     <Page Remove="SetupTests\**" />
+    <Page Remove="JitCheck\**" />
     <None Remove="SetupTests\**" />
+    <None Remove="JitCheck\**" />
     <Resource Remove="SetupTests\**" />
+    <Resource Remove="JitCheck\**" />
     <EmbeddedResource Remove="SetupTests\**" />
+    <EmbeddedResource Remove="JitCheck\**" />
   </ItemGroup>
 
   <ItemGroup>

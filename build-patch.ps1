@@ -51,9 +51,24 @@ foreach ($refDll in @("Tera.Core.dll", "Data.dll")) {
 }
 Write-Host ("    reference libs taken from " + $MeterDir)
 
+# The merged helper IL keeps the helper's own framework references, so the helper has to be
+# compiled for the same .NET major the meter runs on. TeraToolbox's meter is net7, the Classic+
+# fork is net8; v1.6 shipped a net8 helper inside the toolbox build and crashed every net7 meter
+# at the end of the first fight. Read it from the meter itself instead of assuming.
+$rtCfg = Join-Path $MeterDir "ShinraMeter.runtimeconfig.json"
+if (-not (Test-Path $rtCfg)) { throw "ShinraMeter.runtimeconfig.json not found in $MeterDir" }
+$rt = (Get-Content $rtCfg -Raw | ConvertFrom-Json).runtimeOptions
+$fwVersions = @($rt.frameworks | ForEach-Object { $_.version }) + @($rt.framework.version) | Where-Object { $_ }
+$meterMajor = ($fwVersions | ForEach-Object { [int]($_.Split('.')[0]) } | Measure-Object -Maximum).Maximum
+if (-not $meterMajor) { throw "could not read the .NET version from $rtCfg" }
+$helperTfm = "net$meterMajor.0-windows"
+Write-Host ("    meter runs on .NET " + $meterMajor + " -> helper built as " + $helperTfm)
+
 Write-Host "==> building helper against patched reference" -ForegroundColor Cyan
-dotnet build $helper -c Release -v quiet | Out-Null
-$helperDll = Join-Path $helper "bin\Release\net8.0-windows\ShinraRotationPatch.dll"
+Remove-Item (Join-Path $helper "obj") -Recurse -Force -ErrorAction SilentlyContinue
+dotnet build $helper -c Release -v quiet "-p:HelperTfm=$helperTfm" | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "helper build failed (exit $LASTEXITCODE)" }
+$helperDll = Join-Path $helper "bin\Release\$helperTfm\ShinraRotationPatch.dll"
 
 Write-Host "==> mergeinject: merge RotationEnricher into DamageMeter + inject call" -ForegroundColor Cyan
 $patched = Join-Path $work "DamageMeter.patched.dll"
@@ -61,7 +76,7 @@ dotnet $patcherDll mergeinject $p1 $helperDll $patched
 if ($LASTEXITCODE -ne 0) { throw "mergeinject failed (exit $LASTEXITCODE)" }
 
 Write-Host "==> verify merged dll is self-contained" -ForegroundColor Cyan
-dotnet $patcherDll verify $patched
+dotnet $patcherDll verify $patched $meterMajor
 if ($LASTEXITCODE -ne 0) { throw "verify FAILED (exit $LASTEXITCODE) -- not shipping this binary" }
 
 Write-Host "==> assembling $OutDir" -ForegroundColor Cyan

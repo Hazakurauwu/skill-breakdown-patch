@@ -2,7 +2,13 @@
 
   <PropertyGroup>
     <OutputType>Library</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <!-- Must match the .NET version the target meter runs on: the merged IL keeps the helper's
+         framework references, and a net8 reference crashes a net7 meter at the end of the
+         first fight (FileNotFoundException System.Runtime 8.0.0.0, shipped by mistake in v1.6).
+         build-patch.ps1 passes the right value, read from the meter's runtimeconfig. -->
+    <HelperTfm Condition="'$(HelperTfm)' == ''">net8.0-windows</HelperTfm>
+    <TargetFramework>$(HelperTfm)</TargetFramework>
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
     <AssemblyName>ShinraRotationPatch</AssemblyName>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>disable</Nullable>

@@ -111,4 +111,6 @@ public static class L
     public static string ErrVerify => T("The files didn't match after copying. Close the meter and try again.",
                                         "Os arquivos não bateram depois de copiar. Feche o meter e tente de novo.");
     public static string ErrAdminCancelled => T("Administrator permission is needed for this folder.", "É preciso permissão de administrador pra essa pasta.");
+    public static string ErrRuntimeFmt => T("This meter runs on .NET {0}, and this version of the patch needs .NET {1}. Nothing was changed. Ask for help on the EnragedON Discord.",
+                                            "Esse meter roda em .NET {0}, e essa versão do patch precisa do .NET {1}. Nada foi alterado. Peça ajuda no Discord do EnragedON.");
 }

@@ -38,7 +38,7 @@ public static class PatchOps
 
     public static async Task InstallAsync(MeterInfo m, IProgress<StepReport> progress)
     {
-        await Run(progress, 0, L.StepBackupNote, () => { Backup(m); return null; });
+        await Run(progress, 0, L.StepBackupNote, () => { CheckRuntime(m); Backup(m); return null; });
         // "Export packets logs" is turned off as part of installing, without a step of its
         // own: the option's name means nothing to a player and only adds confusion.
         await Run(progress, 1, null, () => { WriteDll(m); TurnOffPacketExport(m.Folder); return null; });
@@ -67,6 +67,17 @@ public static class PatchOps
     }
 
     // ------------------------------------------------------------------ install
+
+    /// <summary>
+    /// Refuses, before touching anything, when the payload needs a newer .NET than the meter runs
+    /// on. That combination opens fine and crashes when the first boss dies (v1.6 toolbox build).
+    /// </summary>
+    public static void CheckRuntime(MeterInfo m)
+    {
+        if (MeterScanner.RuntimeMajor(m.Folder) is not int meter) return;
+        int need = Payload.FrameworkMajor(m.Variant);
+        if (need > meter) throw new FriendlyException(string.Format(L.ErrRuntimeFmt, meter, need));
+    }
 
     static void Backup(MeterInfo m)
     {

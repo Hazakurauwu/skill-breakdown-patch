@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Runs the patch's own code on the SAME .NET the meter runs on and forces the JIT through
+       every method of it. That is the step that crashed v1.6 at the end of the first fight
+       (framework refs newer than the meter's runtime only fail when the code is compiled).
+       Build twice: -p:JitTfm=net7.0-windows for the TeraToolbox meter, net8.0-windows for Classic+.
+       Usage: JitCheck.exe "meter folder" "patched DamageMeter.dll" -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <JitTfm Condition="'$(JitTfm)' == ''">net7.0-windows</JitTfm>
+    <TargetFramework>$(JitTfm)</TargetFramework>
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- never roll forward: the whole point is to run on the meter's exact major -->
+    <RollForward>LatestMinor</RollForward>
+  </PropertyGroup>
+
+</Project>

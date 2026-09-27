@@ -8,12 +8,12 @@ public enum Variant { Toolbox, ClassicPlus }
 /// <summary>The patch DLLs embedded in the exe, plus the hashes of every build ever released.</summary>
 public static class Payload
 {
-    public static readonly string Version = "1.6";
+    public static readonly string Version = "1.7";
 
     static readonly Dictionary<Variant, byte[]> _bytes = new();
     static readonly Dictionary<Variant, string> _hash = new();
 
-    // SHA-256 of DamageMeter.dll from every published release (git tags v1.0..v1.5),
+    // SHA-256 of DamageMeter.dll from every published release (git tags v1.0..v1.6),
     // so the list can say exactly which version a meter currently has.
     static readonly Dictionary<string, string> _released = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -22,7 +22,44 @@ public static class Payload
         ["30bdd66e0af65f74675bc440b964f317ac4ee7dd8636cbb8be3bc7597d13399c"] = "1.4",
         ["2d69791c88e28101552af25be1f06adedb03d16b7943cd1dc43927a4fe8e2cdd"] = "1.5",
         ["46bef5dd372dda9878208ae1ff333ded2753836a981f017003044432eef02c31"] = "1.5",
+        // v1.6 toolbox build: net8 framework refs inside a net7 meter, crashed at the end of the
+        // first fight. The Classic+ build of v1.6 (e211af3b...) is still the current payload.
+        ["790e6524e04829060c9881a0cc753ed44d720717b60b2ae0e615313e5b5ae10e"] = "1.6",
     };
+
+    static readonly Dictionary<Variant, int> _refMajor = new();
+
+    /// <summary>
+    /// Highest .NET major among the payload's framework references (System.*, WPF, ...). The patch
+    /// code is JIT-compiled at the end of the first fight, so a payload that references a newer
+    /// .NET than the meter runs on opens fine and then crashes. Compared against
+    /// MeterScanner.RuntimeMajor before installing.
+    /// </summary>
+    public static int FrameworkMajor(Variant v)
+    {
+        byte[] b = Bytes(v);
+        lock (_refMajor)
+        {
+            if (_refMajor.TryGetValue(v, out int m)) return m;
+            using var pe = new System.Reflection.PortableExecutable.PEReader(new MemoryStream(b));
+            var md = System.Reflection.Metadata.PEReaderExtensions.GetMetadataReader(pe);
+            m = 0;
+            foreach (var h in md.AssemblyReferences)
+            {
+                var r = md.GetAssemblyReference(h);
+                if (IsFrameworkRef(md.GetString(r.Name))) m = Math.Max(m, r.Version.Major);
+            }
+            return _refMajor[v] = m;
+        }
+    }
+
+    // Same list as the build's verify step (src/Patcher.cs IsFrameworkRef): assemblies that come
+    // with the shared .NET runtime, not NuGet packages shipped next to the meter.
+    static bool IsFrameworkRef(string name) =>
+        name == "System" || name == "netstandard" || name == "mscorlib" || name == "WindowsBase" ||
+        name == "PresentationCore" || name == "PresentationFramework" ||
+        (name.StartsWith("System.") && !name.StartsWith("System.Data.SQLite")) ||
+        name.StartsWith("Microsoft.Win32.") || name.StartsWith("Microsoft.VisualBasic") || name == "Microsoft.CSharp";
 
     public static byte[] Bytes(Variant v)
     {

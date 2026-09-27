@@ -167,6 +167,33 @@ public static class MeterScanner
         catch { return Variant.Toolbox; }
     }
 
+    /// <summary>
+    /// The .NET major the meter runs on, from ShinraMeter.runtimeconfig.json (7 for the TeraToolbox
+    /// meter, 8 for Classic+). Null when unknown: no file, unreadable, or a roll-forward policy that
+    /// lets it start on a newer major, in which case there is nothing reliable to compare against.
+    /// </summary>
+    public static int? RuntimeMajor(string folder)
+    {
+        try
+        {
+            string cfg = Path.Combine(folder, "ShinraMeter.runtimeconfig.json");
+            if (!File.Exists(cfg)) return null;
+            var opts = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(cfg))?["runtimeOptions"];
+            if (opts == null) return null;
+            string? roll = opts["rollForward"]?.GetValue<string>();
+            if (roll != null && roll.Contains("Major", StringComparison.OrdinalIgnoreCase)) return null;
+            int best = 0;
+            var versions = new List<string?>();
+            if (opts["frameworks"] is System.Text.Json.Nodes.JsonArray fws)
+                versions.AddRange(fws.Select(f => f?["version"]?.GetValue<string>()));
+            versions.Add(opts["framework"]?["version"]?.GetValue<string>());
+            foreach (var v in versions)
+                if (v != null && int.TryParse(v.Split('.')[0], out int maj)) best = Math.Max(best, maj);
+            return best > 0 ? best : null;
+        }
+        catch { return null; }
+    }
+
     public static bool IsPatched(byte[] dll) => Contains(dll, "ShinraRotationPatch");
 
     public static byte[] ReadShared(string path)

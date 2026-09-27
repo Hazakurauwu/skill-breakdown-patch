@@ -56,7 +56,7 @@ string Copy(string src, string name)
     string dst = Path.Combine(root, name);
     Directory.CreateDirectory(Path.Combine(dst, "resources", "config"));
     foreach (var f in new[] { "DamageMeter.dll", "DamageMeter.Sniffing.dll", "ShinraMeter.dll", "ShinraMeter.exe",
-                              "module.json", "manifest.json", "DamageMeter.dll.prepatch.bak" })
+                              "module.json", "manifest.json", "DamageMeter.dll.prepatch.bak", "ShinraMeter.runtimeconfig.json" })
     {
         string from = Path.Combine(src, f);
         if (File.Exists(from)) try { File.Copy(from, Path.Combine(dst, f), true); } catch { }
@@ -163,6 +163,29 @@ void RunVariantTests(string src, Variant variant, string label)
     }
     Check($"{label}: lock released after closing", !PatchOps.IsLocked(dll));
 
+    Section($"{label}: .NET version check");
+    int? rt = MeterScanner.RuntimeMajor(dir);
+    Check($"{label}: meter .NET version read from runtimeconfig", rt == (variant == Variant.ClassicPlus ? 8 : 7), rt?.ToString() ?? "null");
+    Check($"{label}: payload fits the meter's .NET (v1.6 crash)", Payload.FrameworkMajor(variant) <= (rt ?? 0),
+          $"payload .NET {Payload.FrameworkMajor(variant)}, meter .NET {rt}");
+    string rtCfg = Path.Combine(dir, "ShinraMeter.runtimeconfig.json");
+    string rtOrig = File.ReadAllText(rtCfg);
+    File.WriteAllText(rtCfg, "{\"runtimeOptions\":{\"frameworks\":[{\"name\":\"Microsoft.NETCore.App\",\"version\":\"6.0.0\"}]}}");
+    byte[] before = File.ReadAllBytes(dll);
+    try
+    {
+        PatchOps.InstallAsync(m, quiet).GetAwaiter().GetResult();
+        Check($"{label}: install refuses on an older .NET meter", false, "no exception thrown");
+    }
+    catch (FriendlyException e)
+    {
+        Check($"{label}: install refuses on an older .NET meter", e.Message == string.Format(L.ErrRuntimeFmt, 6, Payload.FrameworkMajor(variant)), e.Message);
+    }
+    Check($"{label}: dll untouched by the refused install", File.ReadAllBytes(dll).SequenceEqual(before));
+    File.WriteAllText(rtCfg, "{\"runtimeOptions\":{\"rollForward\":\"LatestMajor\",\"frameworks\":[{\"name\":\"Microsoft.NETCore.App\",\"version\":\"6.0.0\"}]}}");
+    Check($"{label}: roll-forward meter is not refused", MeterScanner.RuntimeMajor(dir) == null);
+    File.WriteAllText(rtCfg, rtOrig);
+
     Section($"{label}: uninstall with no backup");
     File.Delete(bak);
     try
@@ -191,6 +214,9 @@ Check("toolbox payload embedded", Payload.Bytes(Variant.Toolbox).Length > 100_00
 Check("classic+ payload embedded", Payload.Bytes(Variant.ClassicPlus).Length > 100_000, Payload.Hash(Variant.ClassicPlus)[..16]);
 Check("the two payloads are different builds", Payload.Hash(Variant.Toolbox) != Payload.Hash(Variant.ClassicPlus));
 Check("payload is not mistaken for an older release", Payload.ReleasedVersion(Payload.Hash(Variant.Toolbox)) == null);
+Check("toolbox payload only needs .NET 7", Payload.FrameworkMajor(Variant.Toolbox) == 7, Payload.FrameworkMajor(Variant.Toolbox).ToString());
+Check("classic+ payload needs at most .NET 8", Payload.FrameworkMajor(Variant.ClassicPlus) <= 8, Payload.FrameworkMajor(Variant.ClassicPlus).ToString());
+Check("the crashing v1.6 toolbox build reads as v1.6 (update available)", Payload.ReleasedVersion("790e6524e04829060c9881a0cc753ed44d720717b60b2ae0e615313e5b5ae10e") == "1.6");
 
 Console.WriteLine();
 Console.ForegroundColor = fail == 0 ? ConsoleColor.Green : ConsoleColor.Red;
