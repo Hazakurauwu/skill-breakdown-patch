@@ -479,7 +479,7 @@ public partial class MainWindow : Window
             new() { Folder = folder, Variant = v, State = st, InstalledVersion = ver, HasBackup = bak };
         string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         var cp = Fake(Path.Combine(appData, @"Crazy-eSports-ClassicPlus\mods\external\classicplus.shinra"), Variant.ClassicPlus, MeterState.Outdated, "1.5", true);
-        var tb = Fake(@"C:\Program Files (x86)\TeraToolbox Classic Plus\mods\ShinraMeter", Variant.Toolbox, MeterState.NotInstalled, null, false);
+        var tb = Fake(@"C:\Program Files (x86)\TeraToolbox\mods\ShinraMeter", Variant.Toolbox, MeterState.NotInstalled, null, false);
 
         void Snap(string name)
         {
